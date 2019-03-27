@@ -85,7 +85,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("None")]
         public async Task NoneIntent(IDialogContext context, LuisResult result)
         {             
-            await context.PostAsync($"Sorry, we couldn't understand you.");
+            await context.PostAsync($"NONE INTENT\nSorry, we couldn't understand you\nMind trying other queries?");
             context.Wait(MessageReceived);
         }
 
@@ -113,28 +113,60 @@ namespace Microsoft.Bot.Sample.LuisBot
         public async Task CaloriesQueryIntent(IDialogContext context, LuisResult result)
         {
             //await this.ShowLuisResult(context, result);
+
             IList<string> foods = GetEntities("Food.Name", result);
+            IList<string> unknownFoods = new List<string>();
+            string reply = "";
             
             // if food.name is detected in user response
-            if(foods.Count > 0) {
+            if (foods.Count > 0) {
                 //await context.PostAsync($"Fetching Calories Info...");
-                await CaloriesQuery(context, foods);
+                IList<double> calories = await CaloriesQuery(foods);
+                for(int i = 0; i < calories.Count; i++)
+                {
+                    if (calories[i] >= 0)
+                    {
+                        reply += $"{foods[i]} has {calories[i]} of calories\n";
+                    }
+                    else
+                    {
+                        unknownFoods.Add(foods[i]);
+                    }
+                }
+
+                //if there is unknown food input by user
+                if(unknownFoods.Count > 0)
+                {
+                    reply += "\nOops, I coudn't find any info on ";
+                    foreach(string food in unknownFoods)
+                    {
+                        reply += $"{food}, ";
+                    }
+                    reply = reply.Substring(0, reply.Length - 2) + ".";
+                }
             }
-            // TODO else handling no food.name found in user response
+            // TODO else handling no food match with food.name entity
+            else
+            {
+                // expecting calling back to the same intent after this
+                reply += "CAL.QUERY NEGATIVE\nHmm.. I couldn't find any food in your query.\nCan you please try again with other foods?";
+            }
 
-            lastIntent = result.Intents[0].Intent;
-
-            //await this.ShowLuisResult(context, result);
-            //context.Wait(MessageReceived);
+            // if the trigger is not from Again intent, update the last intent
+            if (result.Intents[0].Intent.CompareTo("Again") != 0)
+            {
+                lastIntent = result.Intents[0].Intent;
+            }
+            await context.PostAsync(reply);
+            context.Wait(MessageReceived);
         }
         
         // append reply with calories query result
-        private async Task CaloriesQuery(IDialogContext context, IList<string> foods) {
+        private async Task<IList<double>> CaloriesQuery(IList<string> foods) {
 
-            // TODO if query for >1 foods
-            string reply = "";
+            IList<double> calories = new List<double>();
 
-            foreach(var food in foods) {
+            foreach (var food in foods) {
                             
                 TableOperation retrieveOp = TableOperation.Retrieve<FoodInfo>("Food.Name", food);
                 TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
@@ -143,13 +175,18 @@ namespace Microsoft.Bot.Sample.LuisBot
                 {
                     // TODO adding to history food query
 
-                    reply += $"{food} has {((FoodInfo)retrievedResult.Result).Calories} of calories\n";
+                    calories.Add(((FoodInfo)retrievedResult.Result).Calories);
                 }
-                // TODO else, handling food not found
+                // else, handling food not found in foodinfo db
+                else
+                {
+                    calories.Add(-1);
+                }
                     
             }
-            await context.PostAsync(reply);
-            context.Wait(MessageReceived);
+
+            return calories;
+            
         }
         
         [LuisIntent("Nutri.Query")]
@@ -173,7 +210,11 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Cancel")]
         public async Task CancelIntent(IDialogContext context, LuisResult result)
         {
-            await this.ShowLuisResult(context, result);
+            //lastIntent = null;
+            await context.PostAsync("Alright, we heared you.\nDo you want to continue with us?");
+            // TODO yes/no option
+            context.Wait(MessageReceived);
+            //await this.ShowLuisResult(context, result);
         }
 
         [LuisIntent("Again")]
@@ -190,7 +231,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                     break;
 
                 default:
-                    await context.PostAsync($"Sorry, we couldn't understand you.");
+                    await context.PostAsync($"AGAIN DEFAULT\nSorry.. I couldn't understand you.\nDo you wanna try other services?");
+                    // TODO list of service option
                     break;
             }
             //await this.ShowLuisResult(context, result);
