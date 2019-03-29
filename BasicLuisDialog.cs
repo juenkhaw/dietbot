@@ -127,7 +127,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                     if (calories[i] >= 0)
                     {
                         reply += $"{foods[i]} has {calories[i]} of calories\n";
-                    }
+                    }   
                     else
                     {
                         unknownFoods.Add(foods[i]);
@@ -145,7 +145,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                     reply = reply.Substring(0, reply.Length - 2) + ".";
                 }
             }
-            // TODO else handling no food match with food.name entity
+            // else handling no food match with food.name entity
             else
             {
                 // expecting calling back to the same intent after this
@@ -192,17 +192,30 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Nutri.Query")]
         public async Task NutriQueryIntent(IDialogContext context, LuisResult result)
         {
-            await this.ShowLuisResult(context, result);
-        }
-        
-        [LuisIntent("Nutri.FullQuery")]
-        public async Task NutriFullQueryIntent(IDialogContext context, LuisResult result)
-        {
-            await this.ShowLuisResult(context, result);
+            //await this.ShowLuisResult(context, result);
+            // TODO also to be coped with Nutri.FullQuery
         }
         
         [LuisIntent("Diet.Recommend")]
         public async Task DietRecommendIntent(IDialogContext context, LuisResult result)
+        {
+            await this.ShowLuisResult(context, result);
+        }
+
+        [LuisIntent("Diet.Query")]
+        public async Task DietQueryIntent(IDialogContext context, LuisResult result)
+        {
+            await this.ShowLuisResult(context, result);
+        }
+
+        [LuisIntent("Symptoms.Food.Query")]
+        public async Task SymptomsFoodQueryIntent(IDialogContext context, LuisResult result)
+        {
+            await this.ShowLuisResult(context, result);
+        }
+
+        [LuisIntent("Finish")]
+        public async Task FinishIntent(IDialogContext context, LuisResult result)
         {
             await this.ShowLuisResult(context, result);
         }
@@ -369,6 +382,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         public double Sodium { get; set; }
         public double Protein { get; set; }
         public double Carbohydrate { get; set; }
+        // TODO add fibre
 
         public string toString()
         {
