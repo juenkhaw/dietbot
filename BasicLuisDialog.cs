@@ -88,6 +88,14 @@ namespace Microsoft.Bot.Sample.LuisBot
             await context.PostAsync($"NONE INTENT\nSorry, we couldn't understand you\nMind trying other queries?");
             context.Wait(MessageReceived);
         }
+        
+        //handle user acknowledgement
+        [LuisIntent("User.Acknowledge")]
+        public async Task UserAcknowledgeIntent(IDialogContext context, LuisResult result)
+        {
+            await context.PostAsync($"ACK INTENT\nThat's good. Anything else?");
+            context.Wait(MessageReceived);
+        }
 
         // Go to https://luis.ai and create a new intent, then train/publish your luis app.
         // Finally replace "Greeting" with the name of your newly created intent in the following handler
