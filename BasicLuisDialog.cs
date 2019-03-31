@@ -64,7 +64,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             LUIS_appId, LUIS_apiKey, domain: LUIS_hostRegion)))
         {
         }
-        
+
         /**
         private async Task testTable(IDialogContext context) {
             // define operation
@@ -80,6 +80,9 @@ namespace Microsoft.Bot.Sample.LuisBot
                 await context.PostAsync("Oops");
         }
         **/
+
+        static string KBOriginalNotFound = "No good match found in KB.";
+        static string KBNotFound = "Sorry, we couldn't understand you.";
 
         // handle unknown user utterances
         [LuisIntent("None")]
@@ -97,6 +100,11 @@ namespace Microsoft.Bot.Sample.LuisBot
             context.Wait(MessageReceived);
         }
 
+        private enum ServiceOption
+        {
+            Calories, Nutrition, Recommendation
+        }
+
         // Go to https://luis.ai and create a new intent, then train/publish your luis app.
         // Finally replace "Greeting" with the name of your newly created intent in the following handler
         [LuisIntent("Greeting")]
@@ -104,7 +112,22 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
             // pass to QnA kb to handle greeting reply
             var qnaMakerAnswer = await domainQnAService.GetAnswer(result.Query);
-            await context.PostAsync($"{qnaMakerAnswer}");
+            var options = new ServiceOption[] { ServiceOption.Calories, ServiceOption.Nutrition, ServiceOption.Recommendation };
+            var descs = new string[] { "How much calories have I consumed?", "What's nutrition of this food?", "Recommend me a meal." };
+            if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
+            {
+                await context.PostAsync($"{KBNotFound}");
+                context.Wait(MessageReceived);
+            } else
+            {
+                PromptDialog.Choice<ServiceOption>(context, ExecServiceOption, options, $"{qnaMakerAnswer}", descriptions: descs);
+            }
+        }
+
+        private async Task ExecServiceOption(IDialogContext context, IAwaitable<ServiceOption> result)
+        {
+            var service = await result;
+            await context.PostAsync($"You chose {service}");
             context.Wait(MessageReceived);
         }
         
@@ -113,7 +136,14 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
             // pass to QnA kb to look for related answer and handle help
             var qnaMakerAnswer = await domainQnAService.GetAnswer(result.Query);
-            await context.PostAsync($"{qnaMakerAnswer}");
+
+            if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
+            {
+                await context.PostAsync($"{KBNotFound}");
+            } else
+            {
+                await context.PostAsync($"{qnaMakerAnswer}");
+            }
             context.Wait(MessageReceived);
         }
         
@@ -157,7 +187,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             else
             {
                 // expecting calling back to the same intent after this
-                reply += "CAL.QUERY NEGATIVE\nHmm.. I couldn't find any food in your query.\nCan you please try again with other foods?";
+                reply += "CAL.QUERY NEGATIVE\nHmm.. We couldn't find any food in your query.\nCan you please try again with other foods?";
             }
 
             // if the trigger is not from Again intent, update the last intent
@@ -165,6 +195,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 lastIntent = result.Intents[0].Intent;
             }
+
             await context.PostAsync(reply);
             context.Wait(MessageReceived);
         }
@@ -225,7 +256,18 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Finish")]
         public async Task FinishIntent(IDialogContext context, LuisResult result)
         {
-            await this.ShowLuisResult(context, result);
+            // pass to QnA kb to look for related answer and handle help
+            var qnaMakerAnswer = await domainQnAService.GetAnswer(result.Query);
+
+            if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
+            {
+                await context.PostAsync($"{KBNotFound}");
+            }
+            else
+            {
+                await context.PostAsync($"{qnaMakerAnswer}");
+            }
+            context.Wait(MessageReceived);
         }
 
         [LuisIntent("Cancel")]
@@ -252,7 +294,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                     break;
 
                 default:
-                    await context.PostAsync($"AGAIN DEFAULT\nSorry.. I couldn't understand you.\nDo you wanna try other services?");
+                    await context.PostAsync($"AGAIN DEFAULT\nSorry.. We couldn't understand you.\nDo you wanna try other services?");
                     // TODO list of service option
                     break;
             }
