@@ -54,9 +54,22 @@ namespace Microsoft.Bot.Sample.LuisBot
         // reference to a table
         static CloudTable foodinfotable = tableClient.GetTableReference("foodinfo");
 
+        // FLAGS SECTION==========================================================
         // record last used intent
-        static string lastIntent = "None";
-        
+        string lastIntent = "None";
+
+        // error message in case of qna kb match not found
+        static string KBOriginalNotFound = "No good match found in KB.";
+        static string KBNotFound = "Sorry, we couldn't understand you.";
+
+        // indicating the bot has started
+        bool SessionStarted = false;
+
+        // indicating the bot has prompted for food
+        // for Calories.Query
+        bool AskedForFood = true;
+        // ========================================================================
+
         public BasicLuisDialog() : base(new LuisService(new LuisModelAttribute(
             //ConfigurationManager.AppSettings["LuisAppId"], 
             //ConfigurationManager.AppSettings["LuisAPIKey"], 
@@ -81,9 +94,6 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
         **/
 
-        static string KBOriginalNotFound = "No good match found in KB.";
-        static string KBNotFound = "Sorry, we couldn't understand you.";
-
         // handle unknown user utterances
         [LuisIntent("None")]
         public async Task NoneIntent(IDialogContext context, LuisResult result)
@@ -92,17 +102,52 @@ namespace Microsoft.Bot.Sample.LuisBot
             context.Wait(MessageReceived);
         }
         
-        //handle user acknowledgement
+        // handle user acknowledgement
         [LuisIntent("User.Acknowledge")]
         public async Task UserAcknowledgeIntent(IDialogContext context, LuisResult result)
         {
-            await context.PostAsync($"ACK INTENT\nThat's good. Anything else?");
+            await context.PostAsync($"ACK INTENT\nThat's good. Anything else you want to ask us?");
             context.Wait(MessageReceived);
         }
 
+        // slection class for prompting service option
         private enum ServiceOption
         {
             Calories, Nutrition, Recommendation
+        }
+
+        [LuisIntent("Bot.Service")]
+        public async Task BotServiceIntent(IDialogContext context, LuisResult result)
+        {
+            await ListServiceOption(context, "You could start with one of these:");
+        }
+
+        private async Task ListServiceOption(IDialogContext context, string msg)
+        {
+            var options = new ServiceOption[] { ServiceOption.Calories, ServiceOption.Nutrition, ServiceOption.Recommendation };
+            var descs = new string[] { "How much calories have I consumed?", "What's nutrition of that food?", "Recommend me a meal." };
+
+            PromptDialog.Choice<ServiceOption>(context, ExecServiceOption, options, msg, descriptions: descs);
+        }
+
+        private async Task ExecServiceOption(IDialogContext context, IAwaitable<ServiceOption> result)
+        {
+            var service = await result;
+            LuisResult stubLR = new LuisResult("", new List<EntityRecommendation>(), new IntentRecommendation(), 
+                new List<IntentRecommendation>(), new List<CompositeEntity>());
+            // TODO pass to respective Intent
+            switch(service)
+            {
+                case ServiceOption.Calories:
+                    stubLR.Intents.Add(new IntentRecommendation("Calories.Query", 1));
+                    await CaloriesQueryIntent(context, stubLR);
+                    break;
+
+                default:
+                    break;
+            }
+            //await context.PostAsync($"You chose {service}");
+            //context.Wait(MessageReceived);
         }
 
         // Go to https://luis.ai and create a new intent, then train/publish your luis app.
@@ -112,25 +157,30 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
             // pass to QnA kb to handle greeting reply
             var qnaMakerAnswer = await domainQnAService.GetAnswer(result.Query);
-            var options = new ServiceOption[] { ServiceOption.Calories, ServiceOption.Nutrition, ServiceOption.Recommendation };
-            var descs = new string[] { "How much calories have I consumed?", "What's nutrition of this food?", "Recommend me a meal." };
+
+            // if this is a miss in KB
             if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
             {
                 await context.PostAsync($"{KBNotFound}");
                 context.Wait(MessageReceived);
-            } else
+            } else //else, prompt user list of serivces only if it is the first greeting, else do not
             {
-                PromptDialog.Choice<ServiceOption>(context, ExecServiceOption, options, $"{qnaMakerAnswer}", descriptions: descs);
+                if (!SessionStarted)
+                {
+                    // marks session started and show list of options
+                    SessionStarted = true;
+                    await ListServiceOption(context, qnaMakerAnswer);
+                }
+                else
+                {
+                    // if greeting is done after session started
+                    await context.PostAsync($"Yes? We are still up here.");
+                    context.Wait(MessageReceived);
+                }
+
             }
         }
 
-        private async Task ExecServiceOption(IDialogContext context, IAwaitable<ServiceOption> result)
-        {
-            var service = await result;
-            await context.PostAsync($"You chose {service}");
-            context.Wait(MessageReceived);
-        }
-        
         [LuisIntent("Bot.Info")]
         public async Task BotInfoIntent(IDialogContext context, LuisResult result)
         {
@@ -164,7 +214,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 {
                     if (calories[i] >= 0)
                     {
-                        reply += $"{foods[i]} has {calories[i]} of calories\n";
+                        reply += $"{foods[i]} has {calories[i]} kcal of calories\n";
                     }   
                     else
                     {
@@ -186,8 +236,16 @@ namespace Microsoft.Bot.Sample.LuisBot
             // else handling no food match with food.name entity
             else
             {
-                // expecting calling back to the same intent after this
-                reply += "CAL.QUERY NEGATIVE\nHmm.. We couldn't find any food in your query.\nCan you please try again with other foods?";
+                if (!AskedForFood)
+                {
+                    // expecting calling back to the same intent after this
+                    reply += "Hmm.. We couldn't find any food in your query.\nCan you please try again with other foods?";
+                } else
+                {
+                    // asking for food if this is first time user query does not contain foods
+                    AskedForFood = false;
+                    reply += "Alright, feed us some foods then.";
+                }
             }
 
             // if the trigger is not from Again intent, update the last intent
@@ -274,7 +332,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         public async Task CancelIntent(IDialogContext context, LuisResult result)
         {
             //lastIntent = null;
-            await context.PostAsync("Alright, we heared you.\nDo you want to continue with us?");
+            await context.PostAsync("Alright, we heared you.\nDo you still wanna stay with us?");
             // TODO yes/no option
             context.Wait(MessageReceived);
             //await this.ShowLuisResult(context, result);
@@ -294,7 +352,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                     break;
 
                 default:
-                    await context.PostAsync($"AGAIN DEFAULT\nSorry.. We couldn't understand you.\nDo you wanna try other services?");
+                    await context.PostAsync($"\nAGAIN INTENT\nSorry.. We couldn't understand you.");
                     // TODO list of service option
                     break;
             }
