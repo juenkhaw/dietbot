@@ -119,6 +119,9 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Bot.Service")]
         public async Task BotServiceIntent(IDialogContext context, LuisResult result)
         {
+            //reset flag on calories query
+            AskedForFood = true;
+
             await ListServiceOption(context, "You could start with one of these:");
         }
 
@@ -503,7 +506,7 @@ namespace Microsoft.Bot.Sample.LuisBot
     // handle list of previously queried food info
     public class FoodHistory
     {
-
+ 
         public IList<FoodInfo> foods;
 
         FoodHistory()
