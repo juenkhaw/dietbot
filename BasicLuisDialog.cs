@@ -67,7 +67,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
         // indicating the bot has prompted for food
         // for Calories.Query
-        bool AskedForFood = true;
+        bool AskedForFood = false;
         // ========================================================================
 
         public BasicLuisDialog() : base(new LuisService(new LuisModelAttribute(
@@ -94,19 +94,31 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
         **/
 
-        // handle unknown user utterances
+        // handle unidentified user intention
+        // assumming user asking about the bot, else bot say sorry
         [LuisIntent("None")]
         public async Task NoneIntent(IDialogContext context, LuisResult result)
-        {             
-            await context.PostAsync($"NONE INTENT\nSorry, we couldn't understand you\nMind trying other queries?");
-            context.Wait(MessageReceived);
+        {
+            // pass to QnA kb to look for related answer and handle help
+            var qnaMakerAnswer = await domainQnAService.GetAnswer(result.Query);
+
+            if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
+            {
+                await AgainIntent(context, result);
+                //await context.PostAsync($"{KBNotFound}");
+            }
+            else
+            {
+                await context.PostAsync($"{qnaMakerAnswer}");
+                context.Wait(MessageReceived);
+            }
         }
         
         // handle user acknowledgement
         [LuisIntent("User.Acknowledge")]
         public async Task UserAcknowledgeIntent(IDialogContext context, LuisResult result)
         {
-            await context.PostAsync($"ACK INTENT\nThat's good. Anything else you want to ask us?");
+            await context.PostAsync($"That's good. Anything else you want to ask us?");
             context.Wait(MessageReceived);
         }
 
@@ -120,7 +132,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         public async Task BotServiceIntent(IDialogContext context, LuisResult result)
         {
             //reset flag on calories query
-            AskedForFood = true;
+            AskedForFood = false;
 
             await ListServiceOption(context, "You could start with one of these:");
         }
@@ -164,7 +176,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             // if this is a miss in KB
             if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
             {
-                await context.PostAsync($"{KBNotFound}");
+                await context.PostAsync($"GREET//{KBNotFound}");
                 context.Wait(MessageReceived);
             } else //else, prompt user list of serivces only if it is the first greeting, else do not
             {
@@ -184,26 +196,28 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
         }
 
-        [LuisIntent("Bot.Info")]
-        public async Task BotInfoIntent(IDialogContext context, LuisResult result)
+        [LuisIntent("User.Aye")]
+        public async Task AyeIntent(IDialogContext context, LuisResult result)
         {
-            // pass to QnA kb to look for related answer and handle help
-            var qnaMakerAnswer = await domainQnAService.GetAnswer(result.Query);
-
-            if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
-            {
-                await context.PostAsync($"{KBNotFound}");
-            } else
-            {
-                await context.PostAsync($"{qnaMakerAnswer}");
-            }
+            await context.PostAsync($"You said YES!");
             context.Wait(MessageReceived);
         }
-        
+
+        [LuisIntent("User.Nay")]
+        public async Task NayIntent(IDialogContext context, LuisResult result)
+        {
+            await context.PostAsync($"You said NO!");
+            context.Wait(MessageReceived);
+        }
+
         [LuisIntent("Calories.Query")]
         public async Task CaloriesQueryIntent(IDialogContext context, LuisResult result)
         {
             //await this.ShowLuisResult(context, result);
+            if (result.Intents[0].Intent.CompareTo("Calories.Query") == 0)
+            {
+                AskedForFood = false;
+            }
 
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> unknownFoods = new List<string>();
@@ -211,7 +225,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             
             // if food.name is detected in user response
             if (foods.Count > 0) {
-                //await context.PostAsync($"Fetching Calories Info...");
+
                 IList<double> calories = await CaloriesQuery(foods);
                 for(int i = 0; i < calories.Count; i++)
                 {
@@ -239,20 +253,20 @@ namespace Microsoft.Bot.Sample.LuisBot
             // else handling no food match with food.name entity
             else
             {
-                if (!AskedForFood)
+                if (AskedForFood)
                 {
                     // expecting calling back to the same intent after this
                     reply += "Hmm.. We couldn't find any food in your query.\nCan you please try again with other foods?";
                 } else
                 {
                     // asking for food if this is first time user query does not contain foods
-                    AskedForFood = false;
+                    AskedForFood = true;
                     reply += "Alright, feed us some foods then.";
                 }
             }
 
             // if the trigger is not from Again intent, update the last intent
-            if (result.Intents[0].Intent.CompareTo("Again") != 0)
+            if (result.Intents[0].Intent.CompareTo("Again") != 0 && result.Intents[0].Intent.CompareTo("None") != 0)
             {
                 lastIntent = result.Intents[0].Intent;
             }
@@ -322,7 +336,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
             if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
             {
-                await context.PostAsync($"{KBNotFound}");
+                await context.PostAsync($"FIN//{KBNotFound}");
             }
             else
             {
@@ -346,17 +360,16 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
             switch(lastIntent)
             {
-                case "None":
-                    await NoneIntent(context, result);
-                    break;
 
                 case "Calories.Query":
+                    AskedForFood = true; // in case enter this intent again with utterances containing no food
                     await CaloriesQueryIntent(context, result);
                     break;
 
+                case "None":
                 default:
-                    await context.PostAsync($"\nAGAIN INTENT\nSorry.. We couldn't understand you.");
-                    // TODO list of service option
+                    await context.PostAsync($"AGAIN//{KBNotFound}");
+                    context.Wait(MessageReceived);
                     break;
             }
             //await this.ShowLuisResult(context, result);
