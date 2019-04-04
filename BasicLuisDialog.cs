@@ -30,19 +30,19 @@ namespace Microsoft.Bot.Sample.LuisBot
     
         // QnA Maker global settings
         // assumes all KBs are created with same Azure service
-        static string qnamaker_endpointKey = "e8a88c4b-2866-47d0-818d-333bd8315fa5";
-        static string qnamaker_endpointDomain = "dietbotqna";
+        static string qnamaker_endpointKey = "288a1049-9d56-4817-bbf9-3f29d0c2771b";
+        static string qnamaker_endpointDomain = "dietbotqnaapp";
     
         // QnA Maker knowledge Base setup
-        static string domain_kb_id = "5dfa2951-a2a0-43b6-8f1a-2027ee895b37";
+        static string domain_kb_id = "560c0b30-0f41-4049-8800-9c69e4d1cb57";
     
         // Instantiate the knowledge bases
         public QnAMakerService domainQnAService = new QnAMakerService(
             "https://" + qnamaker_endpointDomain + ".azurewebsites.net", domain_kb_id, qnamaker_endpointKey);
        
         // Preparing Azure table storage     
-        static string dbname = "ditebotappdb";
-        static string dbkey = "T164DltRhOUy1EbhXonLoxW1G8g8oqe689s/F/jDh8bQzOJy282cjlsBCyyc/TD4GCfVZ4FxK9oMj9sT0zD1Kg==";
+        static string dbname = "dietbotappdb";
+        static string dbkey = "9LEblpcDg5GprW8HFW6z7v0bbAnk1R+CEeiW1jdQ1t+Fz1QCMkX2OK6UstjFuqjjqL4/EHyx13UVkv0mPOlidQ==";
         
         // authentication to access a database
         static CloudStorageAccount storeAcc = new CloudStorageAccount(
