@@ -22,35 +22,35 @@ namespace Microsoft.Bot.Sample.LuisBot
     [Serializable]
     public class BasicLuisDialog : LuisDialog<object>
     {
-        
+
         // LUIS Settings
         static string LUIS_appId = "d54c7abb-3a29-4cbf-bf20-331dce8240aa";
         static string LUIS_apiKey = "f4a57bb428664071995fc541ce0def61";
         static string LUIS_hostRegion = "westus.api.cognitive.microsoft.com";
-    
+
         // QnA Maker global settings
         // assumes all KBs are created with same Azure service
         static string qnamaker_endpointKey = "288a1049-9d56-4817-bbf9-3f29d0c2771b";
         static string qnamaker_endpointDomain = "dietbotqnaapp";
-    
+
         // QnA Maker knowledge Base setup
         static string domain_kb_id = "560c0b30-0f41-4049-8800-9c69e4d1cb57";
-    
+
         // Instantiate the knowledge bases
         public QnAMakerService domainQnAService = new QnAMakerService(
             "https://" + qnamaker_endpointDomain + ".azurewebsites.net", domain_kb_id, qnamaker_endpointKey);
-       
+
         // Preparing Azure table storage     
         static string dbname = "dietbotappdb";
         static string dbkey = "9LEblpcDg5GprW8HFW6z7v0bbAnk1R+CEeiW1jdQ1t+Fz1QCMkX2OK6UstjFuqjjqL4/EHyx13UVkv0mPOlidQ==";
-        
+
         // authentication to access a database
         static CloudStorageAccount storeAcc = new CloudStorageAccount(
             new Microsoft.WindowsAzure.Storage.Auth.StorageCredentials(dbname, dbkey), true);
-        
+
         // reference to a database
         static CloudTableClient tableClient = storeAcc.CreateCloudTableClient();
-        
+
         // reference to a table
         static CloudTable foodinfotable = tableClient.GetTableReference("foodinfo");
 
@@ -68,6 +68,9 @@ namespace Microsoft.Bot.Sample.LuisBot
         // indicating the bot has prompted for food
         // for Calories.Query
         bool AskedForFood = false;
+
+        //tracking on previously queried foods
+        static List<List<TableData>> PrevFoods = new List<List<TableData>>();
         // ========================================================================
 
         public BasicLuisDialog() : base(new LuisService(new LuisModelAttribute(
@@ -113,7 +116,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 context.Wait(MessageReceived);
             }
         }
-        
+
         // handle user acknowledgement
         [LuisIntent("User.Acknowledge")]
         public async Task UserAcknowledgeIntent(IDialogContext context, LuisResult result)
@@ -148,10 +151,10 @@ namespace Microsoft.Bot.Sample.LuisBot
         private async Task ExecServiceOption(IDialogContext context, IAwaitable<ServiceOption> result)
         {
             var service = await result;
-            LuisResult stubLR = new LuisResult("", new List<EntityRecommendation>(), new IntentRecommendation(), 
+            LuisResult stubLR = new LuisResult("", new List<EntityRecommendation>(), new IntentRecommendation(),
                 new List<IntentRecommendation>(), new List<CompositeEntity>());
             // TODO pass to respective Intent
-            switch(service)
+            switch (service)
             {
                 case ServiceOption.Calories:
                     stubLR.Intents.Add(new IntentRecommendation("Calories.Query", 1));
@@ -178,7 +181,8 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 await context.PostAsync($"GREET//{KBNotFound}");
                 context.Wait(MessageReceived);
-            } else //else, prompt user list of serivces only if it is the first greeting, else do not
+            }
+            else //else, prompt user list of serivces only if it is the first greeting, else do not
             {
                 if (!SessionStarted)
                 {
@@ -222,17 +226,22 @@ namespace Microsoft.Bot.Sample.LuisBot
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> unknownFoods = new List<string>();
             string reply = "";
-            
-            // if food.name is detected in user response
-            if (foods.Count > 0) {
 
-                IList<double> calories = await CaloriesQuery(foods);
-                for(int i = 0; i < calories.Count; i++)
+            // if food.name is detected in user response
+            if (foods.Count > 0)
+            {
+
+                AskedForFood = true;
+
+                IList<TableData> results = await FoodInfoQuery(foods);
+                AddFoods(results);
+
+                for (int i = 0; i < results.Count; i++)
                 {
-                    if (calories[i] >= 0)
+                    if (results[i] != null)
                     {
-                        reply += $"{foods[i]} has {calories[i]} kcal of calories\n";
-                    }   
+                        reply += $"{results[i].RowKey} has {results[i].Calories} kcal of calories\n";
+                    }
                     else
                     {
                         unknownFoods.Add(foods[i]);
@@ -240,10 +249,10 @@ namespace Microsoft.Bot.Sample.LuisBot
                 }
 
                 //if there is unknown food input by user
-                if(unknownFoods.Count > 0)
+                if (unknownFoods.Count > 0)
                 {
                     reply += "\nOops, I coudn't find any info on ";
-                    foreach(string food in unknownFoods)
+                    foreach (string food in unknownFoods)
                     {
                         reply += $"{food}, ";
                     }
@@ -257,7 +266,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                 {
                     // expecting calling back to the same intent after this
                     reply += "Hmm.. We couldn't find any food in your query.\nCan you please try again with other foods?";
-                } else
+                }
+                else
                 {
                     // asking for food if this is first time user query does not contain foods
                     AskedForFood = true;
@@ -274,42 +284,42 @@ namespace Microsoft.Bot.Sample.LuisBot
             await context.PostAsync(reply);
             context.Wait(MessageReceived);
         }
-        
+
         // append reply with calories query result
-        private async Task<IList<double>> CaloriesQuery(IList<string> foods) {
+        private async Task<IList<TableData>> FoodInfoQuery(IList<string> foods)
+        {
 
-            IList<double> calories = new List<double>();
+            IList<TableData> results = new List<TableData>();
 
-            foreach (var food in foods) {
-                            
-                TableOperation retrieveOp = TableOperation.Retrieve<FoodInfo>("Food.Name", food);
+            foreach (var food in foods)
+            {
+
+                TableOperation retrieveOp = TableOperation.Retrieve<TableData>("Food.Name", food);
                 TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
 
                 if (retrievedResult.Result != null)
                 {
-                    // TODO adding to history food query
-
-                    calories.Add(((FoodInfo)retrievedResult.Result).Calories);
+                    results.Add((TableData)retrievedResult.Result);
                 }
-                // else, handling food not found in foodinfo db
+                // else, handling food not found in TableData db
                 else
                 {
-                    calories.Add(-1);
+                    results.Add(null);
                 }
-                    
+
             }
 
-            return calories;
-            
+            return results;
+
         }
-        
+
         [LuisIntent("Nutri.Query")]
         public async Task NutriQueryIntent(IDialogContext context, LuisResult result)
         {
             //await this.ShowLuisResult(context, result);
             // TODO also to be coped with Nutri.FullQuery
         }
-        
+
         [LuisIntent("Diet.Recommend")]
         public async Task DietRecommendIntent(IDialogContext context, LuisResult result)
         {
@@ -358,7 +368,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Again")]
         public async Task AgainIntent(IDialogContext context, LuisResult result)
         {
-            switch(lastIntent)
+            switch (lastIntent)
             {
 
                 case "Calories.Query":
@@ -375,6 +385,8 @@ namespace Microsoft.Bot.Sample.LuisBot
             //await this.ShowLuisResult(context, result);
         }
 
+        // METHODS ON PROCESSING UTTERANCES
+
         private string GetResolutionValue(EntityRecommendation ent)
         {
             var dict = ent.Resolution.Values.GetEnumerator();
@@ -386,30 +398,71 @@ namespace Microsoft.Bot.Sample.LuisBot
                 return ent.Entity;
         }
 
-        private async Task ShowLuisResult(IDialogContext context, LuisResult result) 
+        private async Task ShowLuisResult(IDialogContext context, LuisResult result)
         {
             // default stub to display info of luis result
             string output = result.Intents[0].Intent + '\n';
-            foreach(var ent in result.Entities) {
+            foreach (var ent in result.Entities)
+            {
                 output += (ent.Type + ' ' + GetResolutionValue(ent).ToLower() + '\n');
             }
             await context.PostAsync($"{output}");
             //await context.PostAsync($"You have reached {result.Intents[0].Intent}. You said: {result.Query}");
             context.Wait(MessageReceived);
         }
-        
+
         // retrieve list of keys from the luis returned entities by the entity type
-        private IList<string> GetEntities(string entity, LuisResult result) {
+        private IList<string> GetEntities(string entity, LuisResult result)
+        {
             IList<string> entities = new List<string>();
-            
-            foreach(var ent in result.Entities) {
+
+            foreach (var ent in result.Entities)
+            {
                 if (string.Compare(entity, ent.Type) == 0)
                 {
                     entities.Add(GetResolutionValue(ent).ToLower());
                 }
             }
-            
+
             return entities;
+        }
+
+        // METHODS ON FOOD HISTORY LIST
+
+        // check if a certain food is previosuly queried
+        private bool CheckExists(TableData f)
+        {
+            foreach (var foodlist in PrevFoods)
+            {
+                foreach (var food in foodlist)
+                {
+                    if (string.Compare(food.RowKey, f.RowKey) == 0)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        // add food list into previously queried food list
+        private void AddFoods(IList<TableData> f)
+        {
+            List<TableData> food = new List<TableData>();
+            foreach (var s in f)
+            {
+                // exclude those returned with negative result
+                if (s != null)
+                    food.Add(s);
+            }
+
+            // append only if there is at least one positive result in previous query
+            if(food.Count > 0)
+                PrevFoods.Add(food);
+        }
+
+        // retrieve most recent queried foods
+        private List<TableData> GetRecentFoods()
+        {
+            return PrevFoods[PrevFoods.Count - 1];
         }
     }
     
@@ -488,16 +541,16 @@ namespace Microsoft.Bot.Sample.LuisBot
     }
 
     // food info entity class 
-    public class FoodInfo : TableEntity
+    public class TableData : TableEntity
     {
 
-        public FoodInfo(string domain, string id)
+        public TableData(string domain, string id)
         {
-            this.PartitionKey = domain;
-            this.RowKey = id;
+            this.PartitionKey = domain; //ENTITY NAME
+            this.RowKey = id; //FOOD NAME, USER GROUP, SYMPTOM NAME
         }
 
-        public FoodInfo() { }
+        public TableData() { }
 
         public string FoodType { get; set; }
         public double Calories { get; set; }
@@ -508,49 +561,11 @@ namespace Microsoft.Bot.Sample.LuisBot
         public double Carbohydrate { get; set; }
         // TODO add fibre
 
-        public string toString()
+        public override string ToString()
         {
             return "FoodType : " + this.FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories + 
                 "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " + 
                 this.Protein + "\nCarbohydrate : " + this.Carbohydrate;
         }
     }
-
-    // handle list of previously queried food info
-    public class FoodHistory
-    {
- 
-        public IList<FoodInfo> foods;
-
-        FoodHistory()
-        {
-            foods = new List<FoodInfo>();
-        }
-
-        private bool CheckExists(FoodInfo f)
-        {
-            foreach (var food in foods)
-            {
-                if (string.Compare(food.RowKey, f.RowKey) == 0)
-                    return true;
-            }
-            return false;
-        }
-
-        public void AddFood(FoodInfo f)
-        {
-            foods.Add(f);
-        }
-
-        public FoodInfo GetRecentFood()
-        {
-            return foods[foods.Count - 1];
-        }
-
-        public void ClearHistory()
-        {
-            foods.Clear();
-        }
-    }
-
 }
