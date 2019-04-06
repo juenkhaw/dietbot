@@ -125,10 +125,15 @@ namespace Microsoft.Bot.Sample.LuisBot
             context.Wait(MessageReceived);
         }
 
-        // slection class for prompting service option
+        // selection class for prompting service option
         private enum ServiceOption
         {
             Calories, Nutrition, Recommendation
+        }
+
+        // selection class for confirmation
+        private enum ConfirmOption {
+            Aye, Nay
         }
 
         [LuisIntent("Bot.Service")]
@@ -159,6 +164,11 @@ namespace Microsoft.Bot.Sample.LuisBot
                 case ServiceOption.Calories:
                     stubLR.Intents.Add(new IntentRecommendation("Calories.Query", 1));
                     await CaloriesQueryIntent(context, stubLR);
+                    break;
+
+                case ServiceOption.Nutrition:
+                    stubLR.Intents.Add(new IntentRecommendation("Nutri.Query", 1));
+                    await NutriQueryIntent(context, stubLR);
                     break;
 
                 default:
@@ -200,25 +210,11 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
         }
 
-        [LuisIntent("User.Aye")]
-        public async Task AyeIntent(IDialogContext context, LuisResult result)
-        {
-            await context.PostAsync($"You said YES!");
-            context.Wait(MessageReceived);
-        }
-
-        [LuisIntent("User.Nay")]
-        public async Task NayIntent(IDialogContext context, LuisResult result)
-        {
-            await context.PostAsync($"You said NO!");
-            context.Wait(MessageReceived);
-        }
-
         [LuisIntent("Calories.Query")]
         public async Task CaloriesQueryIntent(IDialogContext context, LuisResult result)
         {
             //await this.ShowLuisResult(context, result);
-            if (result.Intents[0].Intent.CompareTo("Calories.Query") == 0)
+            if (MatchIntent(result, new string[] { "Calories.Query" }))
             {
                 AskedForFood = false;
             }
@@ -262,11 +258,31 @@ namespace Microsoft.Bot.Sample.LuisBot
             // else handling no food match with food.name entity
             else
             {
-                if (AskedForFood)
+                // handing follow-up uttereances
+                if (!MatchIntent(result, new string[] {"Again", "None" }) && !MatchIntent(lastIntent, new string[] { "Calories.Query" }))
+                {
+                    // handing query on most recent queried foods
+                    if (PrevFoods.Count > 0)
+                    {
+                        List<TableData> RecentFoods = GetRecentFoods();
+
+                        for (int i = 0; i < RecentFoods.Count; i++)
+                        {
+                            reply += $"{RecentFoods[i].RowKey} has {RecentFoods[i].Calories} kcal of calories\n";
+                        }
+
+                    } else // handing there is no food being quried beforehand
+                    {
+                        reply += "Alright, can you specify some foods?";
+                    }
+                }
+                // handing food not found after user being prompted
+                else if (AskedForFood)
                 {
                     // expecting calling back to the same intent after this
                     reply += "Hmm.. We couldn't find any food in your query.\nCan you please try again with other foods?";
                 }
+                // handling when user firstly invoked this intent
                 else
                 {
                     // asking for food if this is first time user query does not contain foods
@@ -276,7 +292,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
 
             // if the trigger is not from Again intent, update the last intent
-            if (result.Intents[0].Intent.CompareTo("Again") != 0 && result.Intents[0].Intent.CompareTo("None") != 0)
+            if (!MatchIntent(result, new string[] { "Again", "None" }))
             {
                 lastIntent = result.Intents[0].Intent;
             }
@@ -285,39 +301,96 @@ namespace Microsoft.Bot.Sample.LuisBot
             context.Wait(MessageReceived);
         }
 
-        // append reply with calories query result
-        private async Task<IList<TableData>> FoodInfoQuery(IList<string> foods)
-        {
-
-            IList<TableData> results = new List<TableData>();
-
-            foreach (var food in foods)
-            {
-
-                TableOperation retrieveOp = TableOperation.Retrieve<TableData>("Food.Name", food);
-                TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
-
-                if (retrievedResult.Result != null)
-                {
-                    results.Add((TableData)retrievedResult.Result);
-                }
-                // else, handling food not found in TableData db
-                else
-                {
-                    results.Add(null);
-                }
-
-            }
-
-            return results;
-
-        }
-
         [LuisIntent("Nutri.Query")]
         public async Task NutriQueryIntent(IDialogContext context, LuisResult result)
         {
             //await this.ShowLuisResult(context, result);
             // TODO also to be coped with Nutri.FullQuery
+
+            IList<string> foods = GetEntities("Food.Name", result);
+            IList<string> nutris = GetEntities("Food.Nutri", result);
+            IList<string> unknownFoods = new List<string>();
+            string reply = "";
+
+            // if the trigger is not from Again intent, update the last intent
+            if (!MatchIntent(result, new string[] { "Again", "None" }))
+            {
+                lastIntent = result.Intents[0].Intent;
+            }
+
+            // handing complete utterance containing food and nutrition
+            if (foods.Count > 0 && nutris.Count > 0)
+            {
+                IList<TableData> results = await FoodInfoQuery(foods);
+                AddFoods(results);
+
+                for (int i = 0; i < results.Count; i++)
+                {
+                    if (results[i] != null)
+                    {
+                        reply += $"{results[i].RowKey} contain\n";
+                        for (int j = 0; j < nutris.Count; j++)
+                        {
+                            reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
+                        }
+                        reply += "\n";
+                    }
+                }
+
+                reply = reply.Substring(0, reply.Length - 2);
+            }
+            // handing utterance does not contain either food or nutrition
+            else
+            {
+                // handing utterance containing no food
+                if (foods.Count == 0 || nutris.Count > 0)
+                {
+                    // TODO remembering nutrtion entered
+                    reply += "Alright, feed us some foods then.";
+                }
+                // handling displaying all nutritions info
+                else if (foods.Count > 0 && nutris.Count == 0)
+                {
+                    reply += "Displaying all nutrition info for ";
+                    foreach (string food in foods)
+                    {
+                        reply += $"{food}, ";
+                    }
+                    reply = reply.Substring(0, reply.Length - 2);
+                    reply += "?";
+
+                    // confirmation for disaplying all ingo
+                    var options = new ConfirmOption[] { ConfirmOption.Aye, ConfirmOption.Nay };
+                    var descs = new string[] { "Yes, all of them.", "Nope, just some specific nutrition." };
+
+                    PromptDialog.Choice<ConfirmOption>(context, ExecDisplayAllNutrition, options, reply, descriptions: descs);
+                    return;
+                }
+                // handing 
+                else
+                {
+                    reply += "You shouln't be seeing this :/";
+                }
+            }
+
+            await context.PostAsync(reply);
+            context.Wait(MessageReceived);
+        }
+
+        private async Task ExecDisplayAllNutrition(IDialogContext context, IAwaitable<ConfirmOption> result)
+        {
+            var option = await result;
+
+            // handling displaying all nutrition information
+            if (option == ConfirmOption.Aye)
+            {
+                await context.PostAsync("//SHOWING ALL");
+            } else // handing prompting for only specific nutritions
+            {
+                await context.PostAsync("//PROMPTING NUTRI");
+            }
+
+            context.Wait(MessageReceived);
         }
 
         [LuisIntent("Diet.Recommend")]
@@ -376,6 +449,10 @@ namespace Microsoft.Bot.Sample.LuisBot
                     await CaloriesQueryIntent(context, result);
                     break;
 
+                case "Nutri.Query":
+                    await NutriQueryIntent(context, result);
+                    break;
+
                 case "None":
                 default:
                     await context.PostAsync($"AGAIN//{KBNotFound}");
@@ -385,7 +462,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             //await this.ShowLuisResult(context, result);
         }
 
-        // METHODS ON PROCESSING UTTERANCES
+        // METHODS ON PROCESSING UTTERANCES ===============================
 
         private string GetResolutionValue(EntityRecommendation ent)
         {
@@ -427,7 +504,75 @@ namespace Microsoft.Bot.Sample.LuisBot
             return entities;
         }
 
-        // METHODS ON FOOD HISTORY LIST
+        private bool MatchIntent(LuisResult result, string[] intents) {
+            foreach (string intent in intents) {
+                if (result.Intents[0].Intent.CompareTo(intent) == 0)
+                    return true;
+            }
+            return false;
+        }
+
+        private bool MatchIntent(string result, string[] intents)
+        {
+            foreach (string intent in intents)
+            {
+                if (result.CompareTo(intent) == 0)
+                    return true;
+            }
+            return false;
+        }
+
+        // METHODS RELATED TO DB =======================================
+
+        // append food info objects into query result
+        private async Task<IList<TableData>> FoodInfoQuery(IList<string> foods)
+        {
+
+            IList<TableData> results = new List<TableData>();
+
+            foreach (var food in foods)
+            {
+
+                TableOperation retrieveOp = TableOperation.Retrieve<TableData>("Food.Name", food);
+                TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
+
+                if (retrievedResult.Result != null)
+                {
+                    results.Add((TableData)retrievedResult.Result);
+                }
+                // else, handling food not found in TableData db
+                else
+                {
+                    results.Add(null);
+                }
+
+            }
+
+            return results;
+
+        }
+
+        // retrieve specific nutrition of a food
+        private double GetFoodNutrition(TableData f, string nutri)
+        {
+            switch (nutri)
+            {
+                case "protein":
+                    return f.Protein;
+                case "fat":
+                    return f.Fat;
+                case "carbohydrate":
+                    return f.Carbohydrate;
+                case "sugar":
+                    return f.Sugar;
+                case "sodium":
+                    return f.Sodium;
+                default:
+                    return -1;
+            }
+        }
+
+        // METHODS ON FOOD HISTORY LIST ==================================
 
         // check if a certain food is previosuly queried
         private bool CheckExists(TableData f)
