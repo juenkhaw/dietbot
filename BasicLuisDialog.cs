@@ -64,10 +64,19 @@ namespace Microsoft.Bot.Sample.LuisBot
 
         // indicating the bot has started
         bool SessionStarted = false;
+        // indicating if one intent is successfully finished
+        bool IntentFin = true;
 
         // indicating the bot has prompted for food
         // for Calories.Query
         bool AskedForFood = false;
+
+        // flags for Nutri.Query
+        // remembering the awaited nutrition or foods
+        List<string> CachedNutri = new List<string>();
+        List<string> CachedFood = new List<string>();
+        // indicating whether is user prompted for nutrition
+        bool AskedForNutri = false;
 
         //tracking on previously queried foods
         static List<List<TableData>> PrevFoods = new List<List<TableData>>();
@@ -107,8 +116,13 @@ namespace Microsoft.Bot.Sample.LuisBot
 
             if (qnaMakerAnswer.CompareTo(KBOriginalNotFound) == 0)
             {
-                await AgainIntent(context, result);
-                //await context.PostAsync($"{KBNotFound}");
+                if (!IntentFin)
+                    await AgainIntent(context, result);
+                else
+                {
+                    await context.PostAsync($"{KBNotFound}");
+                    context.Wait(MessageReceived);
+                }
             }
             else
             {
@@ -254,10 +268,13 @@ namespace Microsoft.Bot.Sample.LuisBot
                     }
                     reply = reply.Substring(0, reply.Length - 2) + ".";
                 }
+
+                IntentFin = true;
             }
             // else handling no food match with food.name entity
             else
             {
+                IntentFin = false;
                 // handing follow-up uttereances
                 if (!MatchIntent(result, new string[] {"Again", "None" }) && !MatchIntent(lastIntent, new string[] { "Calories.Query" }))
                 {
@@ -270,6 +287,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                         {
                             reply += $"{RecentFoods[i].RowKey} has {RecentFoods[i].Calories} kcal of calories\n";
                         }
+
+                        IntentFin = true;
 
                     } else // handing there is no food being quried beforehand
                     {
@@ -304,8 +323,6 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Nutri.Query")]
         public async Task NutriQueryIntent(IDialogContext context, LuisResult result)
         {
-            //await this.ShowLuisResult(context, result);
-            // TODO also to be coped with Nutri.FullQuery
 
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> nutris = GetEntities("Food.Nutri", result);
@@ -319,38 +336,73 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
 
             // handing complete utterance containing food and nutrition
-            if (foods.Count > 0 && nutris.Count > 0)
+            // also handing case where user is promted for nutrtion previosuly
+            if ((foods.Count > 0 && nutris.Count > 0) || AskedForNutri)
             {
-                IList<TableData> results = await FoodInfoQuery(foods);
-                AddFoods(results);
+                IList<TableData> results = new List<TableData>();
 
-                for (int i = 0; i < results.Count; i++)
+                // if it is a normal complete utterance
+                if (foods.Count > 0 && nutris.Count > 0)
                 {
-                    if (results[i] != null)
-                    {
-                        reply += $"{results[i].RowKey} contain\n";
-                        for (int j = 0; j < nutris.Count; j++)
-                        {
-                            reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
-                        }
-                        reply += "\n";
-                    }
+                    AskedForNutri = false;
+                    results = await FoodInfoQuery(foods);
+                    // else if user is prompted and has correct nutrition found
+                } else if (AskedForNutri && nutris.Count > 0)
+                {
+                    AskedForNutri = false;
+                    results = await FoodInfoQuery(CachedFood);
                 }
 
-                reply = reply.Substring(0, reply.Length - 2);
+                // if user is prompted and yet no correct nutrition found
+                if (AskedForNutri && nutris.Count == 0)
+                {
+                    reply += "Seems like we didn't spot any valid nutrition. Mind trying again?";
+                    IntentFin = false;
+                }
+                else //else show results
+                {
+                    AddFoods(results);
+
+                    for (int i = 0; i < results.Count; i++)
+                    {
+                        if (results[i] != null)
+                        {
+                            reply += $"{results[i].RowKey} contain\n";
+                            for (int j = 0; j < nutris.Count; j++)
+                            {
+                                reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
+                            }
+                            reply += "\n";
+                        }
+                    }
+
+                    reply = reply.Substring(0, reply.Length - 2);
+                    IntentFin = true;
+                }
             }
             // handing utterance does not contain either food or nutrition
             else
             {
-                // handing utterance containing no food
-                if (foods.Count == 0 || nutris.Count > 0)
+                IntentFin = false;
+
+                // handing utterance containing no food and nutrition
+                if (foods.Count == 0 && nutris.Count == 0)
                 {
-                    // TODO remembering nutrtion entered
-                    reply += "Alright, feed us some foods then.";
+                    reply += "Sure, do tell us the foods, and optionally nutrition value you want to know.";
+                }
+                // handling utterance containing no food
+                else if (foods.Count == 0 || nutris.Count > 0)
+                {
+                    // TODO remembering nutrition entered
+                    reply += "Alright, tell us the foods you want to find out.";
                 }
                 // handling displaying all nutritions info
                 else if (foods.Count > 0 && nutris.Count == 0)
                 {
+                    // remebering foods entered
+                    CachedFood.Clear();
+                    CachedFood.AddRange(foods);
+
                     reply += "Displaying all nutrition info for ";
                     foreach (string food in foods)
                     {
@@ -384,10 +436,42 @@ namespace Microsoft.Bot.Sample.LuisBot
             // handling displaying all nutrition information
             if (option == ConfirmOption.Aye)
             {
-                await context.PostAsync("//SHOWING ALL");
+                string reply = "";
+                IList<string> unknownFoods = new List<string>();
+                IList<TableData> results = await FoodInfoQuery(CachedFood);
+                AddFoods(results);
+
+                for (int i = 0; i < results.Count; i++)
+                {
+                    if (results[i] != null)
+                    {
+                        reply += $"{results[i].RowKey} contains\n{results[i].GetFullNutri()}\n";
+                    }
+                    else
+                    {
+                        unknownFoods.Add(CachedFood[i]);
+                    }
+                }
+                reply = reply.Substring(0, reply.Length - 2);
+
+                if (unknownFoods.Count > 0)
+                {
+                    reply += "Oops, I coudn't find any info on ";
+                    foreach (string food in unknownFoods)
+                    {
+                        reply += $"{food}, ";
+                    }
+                    reply = reply.Substring(0, reply.Length - 2) + ".";
+                }
+
+                IntentFin = true;
+                await context.PostAsync(reply);
+
             } else // handing prompting for only specific nutritions
             {
-                await context.PostAsync("//PROMPTING NUTRI");
+                AskedForNutri = true;
+                IntentFin = false;
+                await context.PostAsync("Tell us which nutrition you are looking for.");
             }
 
             context.Wait(MessageReceived);
@@ -431,11 +515,33 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Cancel")]
         public async Task CancelIntent(IDialogContext context, LuisResult result)
         {
-            //lastIntent = null;
+            // resetting all flags and caches
+            ResetFlags();
+            
             await context.PostAsync("Alright, we heared you.\nDo you still wanna stay with us?");
             // TODO yes/no option
             context.Wait(MessageReceived);
             //await this.ShowLuisResult(context, result);
+        }
+
+        private void ResetFlags()
+        {
+            IntentFin = true;
+            switch(lastIntent)
+            {
+                case "Calories.Query":
+                    AskedForFood = false;
+                    break;
+
+                case "Nutri.Query":
+                    AskedForNutri = false;
+                    CachedFood.Clear();
+                    CachedNutri.Clear();
+                    break;
+
+                default:
+                    break;
+            }
         }
 
         [LuisIntent("Again")]
@@ -711,6 +817,11 @@ namespace Microsoft.Bot.Sample.LuisBot
             return "FoodType : " + this.FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories + 
                 "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " + 
                 this.Protein + "\nCarbohydrate : " + this.Carbohydrate;
+        }
+
+        public string GetFullNutri()
+        {
+            return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\n";
         }
     }
 }
