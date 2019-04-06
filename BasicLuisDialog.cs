@@ -76,7 +76,8 @@ namespace Microsoft.Bot.Sample.LuisBot
         List<string> CachedNutri = new List<string>();
         List<string> CachedFood = new List<string>();
         // indicating whether is user prompted for nutrition
-        bool AskedForNutri = false;
+        static bool AskedForNutri = false;
+        static bool AskedForFood2 = false;
 
         //tracking on previously queried foods
         static List<List<TableData>> PrevFoods = new List<List<TableData>>();
@@ -240,7 +241,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             // if food.name is detected in user response
             if (foods.Count > 0)
             {
-
+                IntentFin = true;
                 AskedForFood = true;
 
                 IList<TableData> results = await FoodInfoQuery(foods);
@@ -268,15 +269,14 @@ namespace Microsoft.Bot.Sample.LuisBot
                     }
                     reply = reply.Substring(0, reply.Length - 2) + ".";
                 }
-
-                IntentFin = true;
             }
             // else handling no food match with food.name entity
             else
             {
-                IntentFin = false;
                 // handing follow-up uttereances
-                if (!MatchIntent(result, new string[] {"Again", "None" }) && !MatchIntent(lastIntent, new string[] { "Calories.Query" }))
+                if (!MatchIntent(result, new string[] {"Again", "None" }) && 
+                    !MatchIntent(lastIntent, new string[] { "Calories.Query" }) && 
+                    IntentFin)
                 {
                     // handing query on most recent queried foods
                     if (PrevFoods.Count > 0)
@@ -298,12 +298,14 @@ namespace Microsoft.Bot.Sample.LuisBot
                 // handing food not found after user being prompted
                 else if (AskedForFood)
                 {
+                    IntentFin = false;
                     // expecting calling back to the same intent after this
                     reply += "Hmm.. We couldn't find any food in your query.\nCan you please try again with other foods?";
                 }
                 // handling when user firstly invoked this intent
                 else
                 {
+                    IntentFin = false;
                     // asking for food if this is first time user query does not contain foods
                     AskedForFood = true;
                     reply += "Alright, feed us some foods then.";
@@ -337,30 +339,17 @@ namespace Microsoft.Bot.Sample.LuisBot
 
             // handing complete utterance containing food and nutrition
             // also handing case where user is promted for nutrtion previosuly
-            if ((foods.Count > 0 && nutris.Count > 0) || AskedForNutri)
+            if ((foods.Count > 0 && nutris.Count > 0) || AskedForNutri || AskedForFood2)
             {
+                IntentFin = true;
                 IList<TableData> results = new List<TableData>();
 
                 // if it is a normal complete utterance
                 if (foods.Count > 0 && nutris.Count > 0)
                 {
                     AskedForNutri = false;
+                    AskedForFood2 = false;
                     results = await FoodInfoQuery(foods);
-                    // else if user is prompted and has correct nutrition found
-                } else if (AskedForNutri && nutris.Count > 0)
-                {
-                    AskedForNutri = false;
-                    results = await FoodInfoQuery(CachedFood);
-                }
-
-                // if user is prompted and yet no correct nutrition found
-                if (AskedForNutri && nutris.Count == 0)
-                {
-                    reply += "Seems like we didn't spot any valid nutrition. Mind trying again?";
-                    IntentFin = false;
-                }
-                else //else show results
-                {
                     AddFoods(results);
 
                     for (int i = 0; i < results.Count; i++)
@@ -375,9 +364,66 @@ namespace Microsoft.Bot.Sample.LuisBot
                             reply += "\n";
                         }
                     }
-
                     reply = reply.Substring(0, reply.Length - 2);
-                    IntentFin = true;
+
+                // else if user is prompted for nutrition
+                } else if (AskedForNutri)
+                {
+                    if (nutris.Count > 0)
+                    {
+                        AskedForNutri = false;
+                        results = await FoodInfoQuery(CachedFood);
+                        AddFoods(results);
+
+                        for (int i = 0; i < results.Count; i++)
+                        {
+                            if (results[i] != null)
+                            {
+                                reply += $"{results[i].RowKey} contain\n";
+                                for (int j = 0; j < nutris.Count; j++)
+                                {
+                                    reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
+                                }
+                                reply += "\n";
+                            }
+                        }
+                        reply = reply.Substring(0, reply.Length - 2);
+
+                    } else
+                    {
+                        reply += "Seems like we didn't spot any valid nutrition. Mind trying again?";
+                        IntentFin = false;
+                    }
+                
+                // else if user is prompted for foods
+                } else if (AskedForFood2)
+                {
+                    if(foods.Count > 0)
+                    {
+                        AskedForFood2 = false;
+                        results = await FoodInfoQuery(foods);
+                        AddFoods(results);
+
+                        for (int i = 0; i < results.Count; i++)
+                        {
+                            if (results[i] != null)
+                            {
+                                reply += $"{results[i].RowKey} contain\n";
+                                for (int j = 0; j < CachedNutri.Count; j++)
+                                {
+                                    reply += $"{GetFoodNutrition(results[i], CachedNutri[j])} grams of {CachedNutri[j]}\n";
+                                }
+                                reply += "\n";
+                            }
+                        }
+                        reply = reply.Substring(0, reply.Length - 2);
+
+                    } else
+                    {
+                        reply += "Hmmm, we don't see any foods. Mind trying again?";
+                        IntentFin = false;
+                    }
+                    
                 }
             }
             // handing utterance does not contain either food or nutrition
@@ -388,13 +434,20 @@ namespace Microsoft.Bot.Sample.LuisBot
                 // handing utterance containing no food and nutrition
                 if (foods.Count == 0 && nutris.Count == 0)
                 {
-                    reply += "Sure, do tell us the foods, and optionally nutrition value you want to know.";
+                    reply += "Sure, feed us some foods.\nYou could also specify nutrition value.";
                 }
                 // handling utterance containing no food
-                else if (foods.Count == 0 || nutris.Count > 0)
+                else if (foods.Count == 0 && nutris.Count > 0)
                 {
-                    // TODO remembering nutrition entered
-                    reply += "Alright, tell us the foods you want to find out.";
+                    CachedNutri.Clear();
+                    CachedNutri.AddRange(nutris);
+
+                    foreach (string nutri in CachedNutri)
+                        reply += $"{nutri}, ";
+
+                    reply = $"{reply.Substring(0, reply.Length - 2)} of which food you want to find out?";
+                    AskedForFood2 = true;
+
                 }
                 // handling displaying all nutritions info
                 else if (foods.Count > 0 && nutris.Count == 0)
@@ -535,6 +588,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
                 case "Nutri.Query":
                     AskedForNutri = false;
+                    AskedForFood2 = false;
                     CachedFood.Clear();
                     CachedNutri.Clear();
                     break;
