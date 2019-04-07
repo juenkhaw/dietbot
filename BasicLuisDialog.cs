@@ -271,30 +271,29 @@ namespace Microsoft.Bot.Sample.LuisBot
             else
             {
                 // handing follow-up uttereances
-                if (!MatchIntent(result, new string[] {"Again", "None" }) && 
+                IList<string> FollowUpKey = GetEntities("User.FollowUp", result);
+                if (FollowUpKey.Count > 0 && foods.Count == 0 && 
                     !MatchIntent(lastIntent, new string[] { "Calories.Query" }) && 
                     IntentFin)
                 {
                     // handing query on most recent queried foods
                     if (PrevFoods.Count > 0)
                     {
-                        // confirmation on asking calories on previous food
-                        var options = new ConfirmOption[] { ConfirmOption.Yes, ConfirmOption.No };
-                        var descs = new string[] { "Yes", "Nope" };
-
                         List<TableData> RecentFoods = GetRecentFoods();
-                        reply += "Are you asking calories of previous foods <b>";
-                        foreach (var food in RecentFoods)
-                            reply += $"{food.RowKey}, ";
-                        reply = $"{reply.Substring(0, reply.Length - 2)}</b>";
 
-                        PromptDialog.Choice<ConfirmOption>(context, ExecPrevFoodCalories, options, 
-                            reply, descriptions: descs);
-                        return;
+                        for (int i = 0; i < RecentFoods.Count; i++)
+                        {
+                            reply += $"{RecentFoods[i].RowKey} has {RecentFoods[i].Calories} kcal of calories\n";
+                        }
+
+                        IntentFin = true;
 
                     } else // handing there is no food being quried beforehand
                     {
-                        // PASS to condition below
+                        IntentFin = false;
+                        // asking for food if this is first time user query does not contain foods
+                        AskedForFood = true;
+                        reply += "Alright, feed us some foods then.";
                     }
                 }
                 // handing food not found after user being prompted
@@ -320,33 +319,6 @@ namespace Microsoft.Bot.Sample.LuisBot
                 lastIntent = result.Intents[0].Intent;
             }
 
-            await context.PostAsync(reply);
-            context.Wait(MessageReceived);
-        }
-
-        private async Task ExecPrevFoodCalories(IDialogContext context, IAwaitable<ConfirmOption> result)
-        {
-            var option = await result;
-            string reply = "";
-
-            if (option == ConfirmOption.Yes)
-            {
-                List<TableData> RecentFoods = GetRecentFoods();
-
-                for (int i = 0; i < RecentFoods.Count; i++)
-                {
-                    reply += $"{RecentFoods[i].RowKey} has {RecentFoods[i].Calories} kcal of calories\n";
-                }
-
-                IntentFin = true;
-            } else
-            {
-                IntentFin = false;
-                AskedForFood = true;
-                reply += "Alright, feed us some foods then.";
-            }
-
-            lastIntent = "Calories.Query";
             await context.PostAsync(reply);
             context.Wait(MessageReceived);
         }
@@ -462,28 +434,27 @@ namespace Microsoft.Bot.Sample.LuisBot
             else
             {
                 // handling followup utterances
-                if (!MatchIntent(result, new string[] { "Again", "None" }) && 
-                    nutris.Count > 0 &&
-                    IntentFin)
+                IList<string> FollowUpKey = GetEntities("User.FollowUp", result);
+                if (FollowUpKey.Count > 0 && foods.Count == 0 && 
+                    nutris.Count > 0 && IntentFin)
                 {
                     // handling nutrition query on most recent queried foods
                     if (PrevFoods.Count > 0)
                     {
-                        // confirmation on asking nutritions on previous food
-                        var options = new ConfirmOption[] { ConfirmOption.Yes, ConfirmOption.No };
-                        var descs = new string[] { "Yes", "Nope" };
-
                         List<TableData> RecentFoods = GetRecentFoods();
-                        reply += "Are you asking ";
-                        foreach (string nutri in nutris)
-                            reply += $"{nutri}, ";
-                        reply = $"{reply.Substring(0, reply.Length - 2)} of previous foods?";
-
-                        CachedNutri.Clear();
-                        CachedNutri.AddRange(nutris);
-
-                        PromptDialog.Choice<ConfirmOption>(context, ExecPrevFoodNutri, options,
-                            reply, descriptions: descs);
+                        for (int i = 0; i < RecentFoods.Count; i++)
+                        {
+                            reply += $"{RecentFoods[i].RowKey} contain\n";
+                            for (int j = 0; j < nutris.Count; j++)
+                            {
+                                reply += $"{GetFoodNutrition(RecentFoods[i], nutris[j])} grams of {nutris[j]}\n";
+                            }
+                            reply += "\n";
+                        }
+                        reply = reply.Substring(0, reply.Length - 2);
+                        IntentFin = true;
+                        await context.PostAsync(reply);
+                        context.Wait(MessageReceived);
                         return;
 
                     } else
@@ -590,38 +561,6 @@ namespace Microsoft.Bot.Sample.LuisBot
                 await context.PostAsync("Tell us which nutrition you are looking for.");
             }
 
-            context.Wait(MessageReceived);
-        }
-
-        private async Task ExecPrevFoodNutri(IDialogContext context, IAwaitable<ConfirmOption> result)
-        {
-            var option = await result;
-            string reply = "";
-
-            if (option == ConfirmOption.Yes)
-            {
-                List<TableData> RecentFoods = GetRecentFoods();
-                for (int i = 0; i < RecentFoods.Count; i++)
-                {
-                    reply += $"{RecentFoods[i].RowKey} contain\n";
-                    for (int j = 0; j < CachedNutri.Count; j++)
-                    {
-                        reply += $"{GetFoodNutrition(RecentFoods[i], CachedNutri[j])} grams of {CachedNutri[j]}\n";
-                    }
-                    reply += "\n";
-                }
-                reply = reply.Substring(0, reply.Length - 2);
-                IntentFin = true;
-
-            } else
-            {
-                IntentFin = false;
-                AskedForFood2 = true;
-                reply += "Alright, feed us some other foods then.";
-            }
-
-            lastIntent = "Nutri.Query";
-            await context.PostAsync(reply);
             context.Wait(MessageReceived);
         }
 
