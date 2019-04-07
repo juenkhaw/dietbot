@@ -228,7 +228,6 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Calories.Query")]
         public async Task CaloriesQueryIntent(IDialogContext context, LuisResult result)
         {
-            //await this.ShowLuisResult(context, result);
             if (MatchIntent(result, new string[] { "Calories.Query" }))
             {
                 AskedForFood = false;
@@ -281,14 +280,19 @@ namespace Microsoft.Bot.Sample.LuisBot
                     // handing query on most recent queried foods
                     if (PrevFoods.Count > 0)
                     {
+                        // confirmation on asking calories on previous food
+                        var options = new ConfirmOption[] { ConfirmOption.Aye, ConfirmOption.Nay };
+                        var descs = new string[] { "Yes", "Nope" };
+
                         List<TableData> RecentFoods = GetRecentFoods();
+                        reply += "Are you asking calories of previous foods <b>";
+                        foreach (var food in RecentFoods)
+                            reply += $"{food.RowKey}, ";
+                        reply = $"{reply.Substring(0, reply.Length - 2)}</b>";
 
-                        for (int i = 0; i < RecentFoods.Count; i++)
-                        {
-                            reply += $"{RecentFoods[i].RowKey} has {RecentFoods[i].Calories} kcal of calories\n";
-                        }
-
-                        IntentFin = true;
+                        PromptDialog.Choice<ConfirmOption>(context, ExecPrevFoodCalories, options, 
+                            reply, descriptions: descs);
+                        return;
 
                     } else // handing there is no food being quried beforehand
                     {
@@ -322,6 +326,33 @@ namespace Microsoft.Bot.Sample.LuisBot
             context.Wait(MessageReceived);
         }
 
+        private async Task ExecPrevFoodCalories(IDialogContext context, IAwaitable<ConfirmOption> result)
+        {
+            var option = await result;
+            string reply = "";
+
+            if (option == ConfirmOption.Aye)
+            {
+                List<TableData> RecentFoods = GetRecentFoods();
+
+                for (int i = 0; i < RecentFoods.Count; i++)
+                {
+                    reply += $"{RecentFoods[i].RowKey} has {RecentFoods[i].Calories} kcal of calories\n";
+                }
+
+                IntentFin = true;
+            } else
+            {
+                IntentFin = false;
+                AskedForFood = true;
+                reply += "Alright, feed us some foods then.";
+            }
+
+            lastIntent = "Calories.Query";
+            await context.PostAsync(reply);
+            context.Wait(MessageReceived);
+        }
+
         [LuisIntent("Nutri.Query")]
         public async Task NutriQueryIntent(IDialogContext context, LuisResult result)
         {
@@ -330,6 +361,12 @@ namespace Microsoft.Bot.Sample.LuisBot
             IList<string> nutris = GetEntities("Food.Nutri", result);
             IList<string> unknownFoods = new List<string>();
             string reply = "";
+
+            if (MatchIntent(result, new string[] { "Nutri.Query" }))
+            {
+                AskedForNutri = false;
+                AskedForFood2 = false;
+            }
 
             // if the trigger is not from Again intent, update the last intent
             if (!MatchIntent(result, new string[] { "Again", "None" }))
