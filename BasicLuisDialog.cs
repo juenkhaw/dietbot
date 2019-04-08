@@ -80,7 +80,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         static bool AskedForFood2 = false;
 
         //tracking on previously queried foods
-        static List<List<TableData>> PrevFoods = new List<List<TableData>>();
+        static List<List<FoodData>> PrevFoods = new List<List<FoodData>>();
         // ========================================================================
 
         public BasicLuisDialog() : base(new LuisService(new LuisModelAttribute(
@@ -241,7 +241,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 IntentFin = true;
                 AskedForFood = true;
 
-                IList<TableData> results = await FoodInfoQuery(foods);
+                IList<FoodData> results = await FoodInfoQuery(foods);
                 AddFoods(results);
 
                 for (int i = 0; i < results.Count; i++)
@@ -279,7 +279,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                     // handing query on most recent queried foods
                     if (PrevFoods.Count > 0)
                     {
-                        List<TableData> RecentFoods = GetRecentFoods();
+                        List<FoodData> RecentFoods = GetRecentFoods();
 
                         for (int i = 0; i < RecentFoods.Count; i++)
                         {
@@ -346,7 +346,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             if ((foods.Count > 0 && nutris.Count > 0) || AskedForNutri || AskedForFood2)
             {
                 IntentFin = true;
-                IList<TableData> results = new List<TableData>();
+                IList<FoodData> results = new List<FoodData>();
 
                 // if it is a normal complete utterance
                 if (foods.Count > 0 && nutris.Count > 0)
@@ -441,7 +441,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                     // handling nutrition query on most recent queried foods
                     if (PrevFoods.Count > 0)
                     {
-                        List<TableData> RecentFoods = GetRecentFoods();
+                        List<FoodData> RecentFoods = GetRecentFoods();
                         for (int i = 0; i < RecentFoods.Count; i++)
                         {
                             reply += $"{RecentFoods[i].RowKey} contain\n";
@@ -525,7 +525,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 string reply = "";
                 IList<string> unknownFoods = new List<string>();
-                IList<TableData> results = await FoodInfoQuery(CachedFood);
+                IList<FoodData> results = await FoodInfoQuery(CachedFood);
                 AddFoods(results);
 
                 for (int i = 0; i < results.Count; i++)
@@ -691,7 +691,8 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 if (string.Compare(entity, ent.Type) == 0)
                 {
-                    entities.Add(GetResolutionValue(ent).ToLower());
+                    if (!entities.Contains(GetResolutionValue(ent).ToLower()))
+                        entities.Add(GetResolutionValue(ent).ToLower());
                 }
             }
 
@@ -719,22 +720,22 @@ namespace Microsoft.Bot.Sample.LuisBot
         // METHODS RELATED TO DB =======================================
 
         // append food info objects into query result
-        private async Task<IList<TableData>> FoodInfoQuery(IList<string> foods)
+        private async Task<IList<FoodData>> FoodInfoQuery(IList<string> foods)
         {
 
-            IList<TableData> results = new List<TableData>();
+            IList<FoodData> results = new List<FoodData>();
 
             foreach (var food in foods)
             {
 
-                TableOperation retrieveOp = TableOperation.Retrieve<TableData>("Food.Name", food);
+                TableOperation retrieveOp = TableOperation.Retrieve<FoodData>("Food.Name", food);
                 TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
 
                 if (retrievedResult.Result != null)
                 {
-                    results.Add((TableData)retrievedResult.Result);
+                    results.Add((FoodData)retrievedResult.Result);
                 }
-                // else, handling food not found in TableData db
+                // else, handling food not found in FoodData db
                 else
                 {
                     results.Add(null);
@@ -747,7 +748,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         // retrieve specific nutrition of a food
-        private double GetFoodNutrition(TableData f, string nutri)
+        private double GetFoodNutrition(FoodData f, string nutri)
         {
             switch (nutri)
             {
@@ -761,6 +762,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                     return f.Sugar;
                 case "sodium":
                     return f.Sodium;
+                case "fibre":
+                    return f.Fibre;
                 default:
                     return -1;
             }
@@ -769,7 +772,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         // METHODS ON FOOD HISTORY LIST ==================================
 
         // check if a certain food is previosuly queried
-        private bool CheckExists(TableData f)
+        private bool CheckExists(FoodData f)
         {
             foreach (var foodlist in PrevFoods)
             {
@@ -783,9 +786,9 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         // add food list into previously queried food list
-        private void AddFoods(IList<TableData> f)
+        private void AddFoods(IList<FoodData> f)
         {
-            List<TableData> food = new List<TableData>();
+            List<FoodData> food = new List<FoodData>();
             foreach (var s in f)
             {
                 // exclude those returned with negative result
@@ -799,7 +802,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         // retrieve most recent queried foods
-        private List<TableData> GetRecentFoods()
+        private List<FoodData> GetRecentFoods()
         {
             return PrevFoods[PrevFoods.Count - 1];
         }
@@ -880,16 +883,16 @@ namespace Microsoft.Bot.Sample.LuisBot
     }
 
     // food info entity class 
-    public class TableData : TableEntity
+    public class FoodData : TableEntity
     {
 
-        public TableData(string domain, string id)
+        public FoodData(string domain, string id)
         {
             this.PartitionKey = domain; //ENTITY NAME
             this.RowKey = id; //FOOD NAME, USER GROUP, SYMPTOM NAME
         }
 
-        public TableData() { }
+        public FoodData() { }
 
         public string FoodType { get; set; }
         public double Calories { get; set; }
@@ -898,18 +901,19 @@ namespace Microsoft.Bot.Sample.LuisBot
         public double Sodium { get; set; }
         public double Protein { get; set; }
         public double Carbohydrate { get; set; }
-        // TODO add fibre
+        public double Fibre { get; set; }
 
         public override string ToString()
         {
-            return "FoodType : " + this.FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories + 
+            return "FoodType : " + FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories + 
                 "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " + 
-                this.Protein + "\nCarbohydrate : " + this.Carbohydrate;
+                this.Protein + "\nCarbohydrate : " + this.Carbohydrate + "\nFibre : " + this.Fibre;
         }
 
         public string GetFullNutri()
         {
-            return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\n";
+            return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} " +
+                $"g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\nFibre: {Fibre} g\n";
         }
     }
 }
