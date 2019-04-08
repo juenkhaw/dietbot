@@ -607,11 +607,83 @@ namespace Microsoft.Bot.Sample.LuisBot
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> symptoms = GetEntities("Symptoms.Food.Query ", result);
             IList<FoodData> results = await FoodInfoQuery(foods);
+            DietData dietInfo = await DietInfoQuery("Symptoms.Food.Query", symptoms[0]);
+            int[] foodResult = new int[foods.Count];
+            String printResultToUser = "";
+
+            for (int i=0; i < foods.Count; i++)
+            {
+                int foodGoodCount = 0;
+                if (string.Equals(symptoms[0], "constipation")){
+                    double carbohydrate = dietInfo.Carbohydrate;
+                    double fat = dietInfo.Fat;
+                    double fibre = dietInfo.Fibre;
+                    double protein = dietInfo.Protein;
+
+                    if (results[i].Carbohydrate >= carbohydrate)
+                    {
+                        foodGoodCount++;
+                    }
+                    if(results[i].Fat>= fat)
+                    {
+                        foodGoodCount++;
+                    }
+                    if(results[i].Fibre <= fibre)
+                    {
+                        foodGoodCount++;
+                    }
+                    if(results[i].Protein <= protein)
+                    {
+                        foodGoodCount++;
+                    }
+
+                    if (foodGoodCount >= 3)
+                        printResultToUser += foods[i] + " is good for constipation person \n";
+                    else
+                        printResultToUser += foods[i] + " is not good for constipation person \n";
+                }
+                else if (string.Equals(symptoms[0], "diabetes"))
+                {
+                    double carbohydrate = dietInfo.Carbohydrate;
+                    double sugar = dietInfo.Sugar;
+
+                    if(results[i].Carbohydrate <= carbohydrate)
+                    {
+                        foodGoodCount++;
+                    }
+                    if(results[i].Sugar <= sugar)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (foodGoodCount >= 2)
+                        printResultToUser += foods[i] + " is good for diabetes person \n";
+                    else
+                        printResultToUser += foods[i] + " is not good for diabetes person \n";
+
+
+
+                }
+                else
+                {
+                    double calories = dietInfo.Calories;
+                    if(results[i].Calories <= calories)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (foodGoodCount >= 1)
+                        printResultToUser += foods[i] + " is good for obesity person \n";
+                    else
+                        printResultToUser += foods[i] + " is not good for obesity person \n";
+
+                }
+
+            }
 
 
 
 
-
+            await context.PostAsync(printResultToUser);
+            context.Wait(MessageReceived);
 
 
 
