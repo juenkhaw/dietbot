@@ -80,10 +80,10 @@ namespace Microsoft.Bot.Sample.LuisBot
         static bool AskedForFood2 = false;
 
         // tracking on previously queried foods
-        static List<List<FoodData>> PrevFoods = new List<List<FoodData>>();
+        List<List<FoodData>> PrevFoods = new List<List<FoodData>>();
 
-        // tracking on user age group
-        static List<string> UserGroup = new List<string>();
+        // tracking on user age group, set deafult as adult
+        string AgeGroup = "adult";
 
         // ========================================================================
 
@@ -577,7 +577,23 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Diet.Query")]
         public async Task DietQueryIntent(IDialogContext context, LuisResult result)
         {
-            await this.ShowLuisResult(context, result);
+            //await this.ShowLuisResult(context, result);
+            IList<string> foods = GetEntities("Food.Name", result);
+            IList<string> group = GetEntities("User.Group", result);
+
+            string reply = "";
+
+            // handling normal complete utterance
+            if (foods.Count > 0 && group.Count == 1)
+            {
+                
+            } else
+            {
+                reply += "MOM";
+            }
+
+            await context.PostAsync(reply);
+            context.Wait(MessageReceived);
         }
 
         [LuisIntent("Symptoms.Food.Query")]
@@ -738,6 +754,33 @@ namespace Microsoft.Bot.Sample.LuisBot
                 if (retrievedResult.Result != null)
                 {
                     results.Add((FoodData)retrievedResult.Result);
+                }
+                // else, handling food not found in FoodData db
+                else
+                {
+                    results.Add(null);
+                }
+
+            }
+
+            return results;
+
+        }
+
+        private async Task<IList<DietData>> DietInfoQuery(string PartitionKeyName, IList<string> Query)
+        {
+
+            IList<DietData> results = new List<DietData>();
+
+            foreach (var q in Query)
+            {
+
+                TableOperation retrieveOp = TableOperation.Retrieve<DietData>(PartitionKeyName, q);
+                TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
+
+                if (retrievedResult.Result != null)
+                {
+                    results.Add((DietData)retrievedResult.Result);
                 }
                 // else, handling food not found in FoodData db
                 else
