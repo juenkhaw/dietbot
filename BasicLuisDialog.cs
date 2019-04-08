@@ -924,7 +924,7 @@ namespace Microsoft.Bot.Sample.LuisBot
     // diet table entity class
     public class DietData : TableEntity
     {
-        // waidjaosd
+        
         public DietData(string domain, string id)
         {
             this.PartitionKey = domain; //ENTITY NAME
