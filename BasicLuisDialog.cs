@@ -79,8 +79,12 @@ namespace Microsoft.Bot.Sample.LuisBot
         static bool AskedForNutri = false;
         static bool AskedForFood2 = false;
 
-        //tracking on previously queried foods
+        // tracking on previously queried foods
         static List<List<FoodData>> PrevFoods = new List<List<FoodData>>();
+
+        // tracking on user age group
+        static List<string> UserGroup = new List<string>();
+
         // ========================================================================
 
         public BasicLuisDialog() : base(new LuisService(new LuisModelAttribute(
@@ -911,6 +915,40 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         public string GetFullNutri()
+        {
+            return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} " +
+                $"g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\nFibre: {Fibre} g\n";
+        }
+    }
+
+    // diet table entity class
+    public class DietData : TableEntity
+    {
+
+        public DietData(string domain, string id)
+        {
+            this.PartitionKey = domain; //ENTITY NAME
+            this.RowKey = id; //FOOD NAME, USER GROUP, SYMPTOM NAME
+        }
+
+        public DietData() { }
+
+        public double Calories { get; set; }
+        public double Fat { get; set; }
+        public double Sugar { get; set; }
+        public double Sodium { get; set; }
+        public double Protein { get; set; }
+        public double Carbohydrate { get; set; }
+        public double Fibre { get; set; }
+
+        public override string ToString()
+        {
+            return "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories +
+                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " +
+                this.Protein + "\nCarbohydrate : " + this.Carbohydrate + "\nFibre : " + this.Fibre;
+        }
+
+        public string GetFullDiet()
         {
             return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} " +
                 $"g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\nFibre: {Fibre} g\n";
