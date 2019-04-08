@@ -246,6 +246,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 AskedForFood = true;
 
                 IList<FoodData> results = await FoodInfoQuery(foods);
+
                 AddFoods(results);
 
                 for (int i = 0; i < results.Count; i++)
@@ -599,7 +600,25 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Symptoms.Food.Query")]
         public async Task SymptomsFoodQueryIntent(IDialogContext context, LuisResult result)
         {
-            await this.ShowLuisResult(context, result);
+
+            IList<string> foods = GetEntities("Food.Name", result);
+            IList<string> symptoms = GetEntities("Symptoms.Food.Query ", result);
+            IList<FoodData> results = await FoodInfoQuery(foods);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         }
 
         [LuisIntent("Finish")]
