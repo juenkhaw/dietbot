@@ -83,7 +83,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         List<List<FoodData>> PrevFoods = new List<List<FoodData>>();
 
         // tracking on user age group, set deafult as adult
-        string AgeGroup = "adult";
+        DietData AgeGroupDiet;
 
         // ========================================================================
 
@@ -582,7 +582,10 @@ namespace Microsoft.Bot.Sample.LuisBot
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> group = GetEntities("User.Group", result);
 
+            AgeGroupDiet = await DietInfoQuery("User.Diet", "adult");
+
             string reply = "";
+            double ratio = 0.3;
 
             // handling normal complete utterance
             if (foods.Count > 0 && group.Count == 1)
@@ -786,30 +789,21 @@ namespace Microsoft.Bot.Sample.LuisBot
 
         }
 
-        private async Task<IList<DietData>> DietInfoQuery(string PartitionKeyName, IList<string> Query)
+        private async Task<DietData> DietInfoQuery(string PartitionKeyName, string Query)
         {
 
-            IList<DietData> results = new List<DietData>();
+            TableOperation retrieveOp = TableOperation.Retrieve<DietData>(PartitionKeyName, Query);
+            TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
 
-            foreach (var q in Query)
+            if (retrievedResult.Result != null)
             {
-
-                TableOperation retrieveOp = TableOperation.Retrieve<DietData>(PartitionKeyName, q);
-                TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
-
-                if (retrievedResult.Result != null)
-                {
-                    results.Add((DietData)retrievedResult.Result);
-                }
-                // else, handling food not found in FoodData db
-                else
-                {
-                    results.Add(null);
-                }
-
+                return (DietData)retrievedResult.Result;
             }
-
-            return results;
+            // else, handling food not found in FoodData db
+            else
+            {
+                return null;
+            }
 
         }
 
