@@ -85,7 +85,8 @@ namespace Microsoft.Bot.Sample.LuisBot
         // flags for Diet.Query
         bool Invoked = false;
         // tracking on user age group, set deafult as adult
-        static List<DietData> AgeGroupDiet = new List<DietData>();
+        static DietData AgeGroupDiet = new DietData();
+        List<string> CachedNutri2 = new List<string>();
 
         // ========================================================================
 
@@ -266,11 +267,9 @@ namespace Microsoft.Bot.Sample.LuisBot
                 if (unknownFoods.Count > 0)
                 {
                     reply += "\nOops, I coudn't find any info on ";
-                    foreach (string food in unknownFoods)
-                    {
-                        reply += $"{food}, ";
-                    }
-                    reply = reply.Substring(0, reply.Length - 2) + ".";
+                    for (int i = 0; i < unknownFoods.Count; i++)
+                        reply += $"{unknownFoods[i]}{((unknownFoods.Count > 1) ? (i != (unknownFoods.Count - 2)) ? ", " : " and " : "")}";
+                    reply += ".";
                 }
             }
             // else handling no food match with food.name entity
@@ -482,10 +481,10 @@ namespace Microsoft.Bot.Sample.LuisBot
                     CachedNutri.Clear();
                     CachedNutri.AddRange(nutris);
 
-                    foreach (string nutri in CachedNutri)
-                        reply += $"{nutri}, ";
+                    for (int i = 0; i < CachedNutri.Count; i++)
+                        reply += $"{CachedNutri[i]}{((CachedNutri.Count > 1) ? (i != (CachedNutri.Count - 2)) ? ", " : " and " : "")}";
 
-                    reply = $"{reply.Substring(0, reply.Length - 2)} of which food you want to find out?";
+                    reply += " of which food you want to find out?";
                     AskedForFood2 = true;
 
                 }
@@ -497,11 +496,10 @@ namespace Microsoft.Bot.Sample.LuisBot
                     CachedFood.AddRange(foods);
 
                     reply += "Displaying all nutrition info for ";
-                    foreach (string food in foods)
+                    for (int i = 0; i < foods.Count; i++) 
                     {
-                        reply += $"{food}, ";
+                        reply += $"{foods[i]}{((foods.Count > 1) ? (i != (foods.Count - 2)) ? ", " : " and " : "")}";
                     }
-                    reply = reply.Substring(0, reply.Length - 2);
                     reply += "?";
 
                     // confirmation for disaplying all ingo
@@ -550,11 +548,9 @@ namespace Microsoft.Bot.Sample.LuisBot
                 if (unknownFoods.Count > 0)
                 {
                     reply += "Oops, I coudn't find any info on ";
-                    foreach (string food in unknownFoods)
-                    {
-                        reply += $"{food}, ";
-                    }
-                    reply = reply.Substring(0, reply.Length - 2) + ".";
+                    for (int j = 0; j < unknownFoods.Count; j++)
+                        reply += $"{unknownFoods[j]}{((unknownFoods.Count > 1) ? (j != (unknownFoods.Count - 2)) ? ", " : " and " : "")}";
+                    reply += ".";
                 }
 
                 IntentFin = true;
@@ -583,24 +579,94 @@ namespace Microsoft.Bot.Sample.LuisBot
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> nutris = GetEntities("Food.Nutri", result);
             IList<string> group = GetEntities("User.Group", result);
+            IList<string> followup = GetEntities("User.FollowUp", result);
 
-            if (!Invoked)
+            // if this intent is invoked before or having age group query
+            if (!Invoked || group.Count > 0)
             {
+                // update to the age group mentioned
+                if (group.Count > 0)
+                    AgeGroupDiet = await DietInfoQuery("User.Diet", group[0]);
+                // else, set to default age group
+                else if (!Invoked)
+                    AgeGroupDiet = await DietInfoQuery("User.Diet", "adult");
                 Invoked = true;
-                DietData buffer = await DietInfoQuery("User.Diet", "adult");
-                AgeGroupDiet.Add(buffer);
+            }
+
+            if (!MatchIntent(result, new string[] { "Again", "None" }))
+            {
+                lastIntent = result.Intents[0].Intent;
             }
 
             string reply = "";
-            double ratio = 0.3;
+            double ratio = 0.33;
+            string[] extent = { "rather low", "moderate", "moderate", "high", "rather high" };
 
-            // handling normal complete utterance
-            if (foods.Count > 0 && nutris.Count > 0)
+            IList<FoodData> results;
+            // if it is not a followup utterances
+            if (followup.Count == 0 && foods.Count > 0)
             {
-                reply += AgeGroupDiet[0].GetFullDiet();
+                results = await FoodInfoQuery(foods);
+                AddFoods(results);
             } else
             {
-                reply += "MOM";
+                // if there is already previous food quried
+                if (PrevFoods.Count > 0 && IntentFin)
+                    results = GetRecentFoods();
+                else
+                {
+                    reply += "Sure, but please make some queries first.";
+                    await context.PostAsync(reply);
+                    context.Wait(MessageReceived);
+                    return;
+                }
+            }
+
+            // managing cache for nutrition
+            if (nutris.Count > 0)
+            {
+                CachedNutri2.Clear();
+                CachedNutri2.AddRange(nutris);
+            }
+            else
+                nutris = CachedNutri2;
+
+            // handling normal complete utterance iwith only one food with more than one nutritions 
+            // conditions:
+            // 1. it is a complete full utterance
+            // 2. It is a followup utterance
+            // 3. It is specified with a age group and have previous food queried
+            if ((foods.Count > 0 && nutris.Count > 0) || (nutris.Count > 0 && followup.Count > 0) || (PrevFoods.Count > 0 && group.Count > 0))
+            {
+                reply += $"For a single meal of normal {AgeGroupDiet.RowKey},";
+                for (int k = 0; k < results.Count; k++)
+                {
+                    reply += $"\n{results[k].RowKey} has ";
+                    for (int i = 0; i < nutris.Count; i++)
+                    {
+                        double baseline = GetFoodNutrition(AgeGroupDiet, nutris[i]) * ratio;
+                        double currentNutri = GetFoodNutrition(results[k], nutris[i]);
+                        for (double j = 0.2; j <= 1; j += 0.2)
+                        {
+                            if (baseline * j > currentNutri)
+                            {
+                                reply += $"{extent[(int)(j / 0.2 - 1)]} ({currentNutri}g)";
+                                break;
+                            }
+                        }
+                        if (baseline < GetFoodNutrition(results[k], nutris[i]))
+                            reply += $"{extent[4]} ({currentNutri}g)";
+                        reply += $" {nutris[i]}{((nutris.Count > 1)?(i != (nutris.Count - 2)) ? ", " : " and " : "")}";
+                    }
+                    reply += ",";
+                }
+                reply = reply.Substring(0, reply.Length - 1) + ".";
+                IntentFin = true;
+            } else // pass to Nutri.Query intent if anything missing in utterances
+            {
+                lastIntent = "Nutri.Query";
+                await NutriQueryIntent(context, result);
+                return;
             }
 
             await context.PostAsync(reply);
@@ -658,6 +724,10 @@ namespace Microsoft.Bot.Sample.LuisBot
                     CachedNutri.Clear();
                     break;
 
+                case "Diet.Query":
+                    Invoked = false;
+                    break;
+
                 default:
                     break;
             }
@@ -676,6 +746,10 @@ namespace Microsoft.Bot.Sample.LuisBot
 
                 case "Nutri.Query":
                     await NutriQueryIntent(context, result);
+                    break;
+
+                case "Diet.Query":
+                    await DietQueryIntent(context, result);
                     break;
 
                 case "None":
@@ -798,6 +872,27 @@ namespace Microsoft.Bot.Sample.LuisBot
 
         // retrieve specific nutrition of a food
         private double GetFoodNutrition(FoodData f, string nutri)
+        {
+            switch (nutri)
+            {
+                case "protein":
+                    return f.Protein;
+                case "fat":
+                    return f.Fat;
+                case "carbohydrate":
+                    return f.Carbohydrate;
+                case "sugar":
+                    return f.Sugar;
+                case "sodium":
+                    return f.Sodium;
+                case "fibre":
+                    return f.Fibre;
+                default:
+                    return -1;
+            }
+        }
+
+        private double GetFoodNutrition(DietData f, string nutri)
         {
             switch (nutri)
             {
