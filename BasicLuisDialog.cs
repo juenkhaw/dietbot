@@ -80,10 +80,12 @@ namespace Microsoft.Bot.Sample.LuisBot
         static bool AskedForFood2 = false;
 
         // tracking on previously queried foods
-        List<List<FoodData>> PrevFoods = new List<List<FoodData>>();
+        static List<List<FoodData>> PrevFoods = new List<List<FoodData>>();
 
+        // flags for Diet.Query
+        bool Invoked = false;
         // tracking on user age group, set deafult as adult
-        DietData AgeGroupDiet;
+        static List<DietData> AgeGroupDiet = new List<DietData>();
 
         // ========================================================================
 
@@ -580,17 +582,23 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
             //await this.ShowLuisResult(context, result);
             IList<string> foods = GetEntities("Food.Name", result);
+            IList<string> nutris = GetEntities("Food.Nutri", result);
             IList<string> group = GetEntities("User.Group", result);
 
-            AgeGroupDiet = await DietInfoQuery("User.Diet", "adult");
+            if (!Invoked)
+            {
+                Invoked = true;
+                DietData buffer = await DietInfoQuery("User.Diet", "adult");
+                AgeGroupDiet.Add(buffer);
+            }
 
             string reply = "";
             double ratio = 0.3;
 
             // handling normal complete utterance
-            if (foods.Count > 0 && group.Count == 1)
+            if (foods.Count > 0 && nutris.Count > 0)
             {
-                
+                reply += AgeGroupDiet[0].GetFullDiet();
             } else
             {
                 reply += "MOM";
