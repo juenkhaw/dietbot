@@ -659,11 +659,11 @@ namespace Microsoft.Bot.Sample.LuisBot
                     {
                         foodGoodCount++;
                     }
-                    if (results[i].Fibre <= fibre)
+                    if (!(results[i].Fibre <= fibre))
                     {
                         foodGoodCount++;
                     }
-                    if (results[i].Protein <= protein)
+                    if (!(results[i].Protein <= protein))
                     {
                         foodGoodCount++;
                     }
