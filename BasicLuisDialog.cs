@@ -623,19 +623,14 @@ namespace Microsoft.Bot.Sample.LuisBot
 
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> symptoms = GetEntities("User.Symptoms", result);
-            await context.PostAsync("able to get" + foods.Count + "," + "able to get" + symptoms.Count);
-            context.Wait(MessageReceived);
-
             IList<FoodData> results = await FoodInfoQuery(foods);
-            await context.PostAsync("able to get" + results.Count);
-            context.Wait(MessageReceived);
-
             IList<SymptomsData> symptomsResults = await SymptomsInfoQuery(symptoms);
-            await context.PostAsync( "Able to get "+symptomsResults.Count);
-            context.Wait(MessageReceived);
+            
+            
+           
 
 
-/*
+
             //  int[] foodResult = new int[foods.Count];
             String printResultToUser = "";
 
@@ -645,10 +640,10 @@ namespace Microsoft.Bot.Sample.LuisBot
                 int foodGoodCount = 0;
                 if (string.Equals(symptoms[0], "constipation"))
                 {
-                    double carbohydrate = dietInfo.Carbohydrate;
-                    double fat = dietInfo.Fat;
-                    double fibre = dietInfo.Fibre;
-                    double protein = dietInfo.Protein;
+                    double carbohydrate = symptomsResults[0].Carbohydrate;
+                    double fat = symptomsResults[0].Fat;
+                    double fibre = symptomsResults[0].Fibre;
+                    double protein = symptomsResults[0].Protein;
 
                     if (results[i].Carbohydrate >= carbohydrate)
                     {
@@ -674,8 +669,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                 }
                 else if (string.Equals(symptoms[0], "diabetes"))
                 {
-                    double carbohydrate = dietInfo.Carbohydrate;
-                    double sugar = dietInfo.Sugar;
+                    double carbohydrate = symptomsResults[0].Carbohydrate;
+                    double sugar = symptomsResults[0].Sugar;
 
                     if (results[i].Carbohydrate <= carbohydrate)
                     {
@@ -695,7 +690,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 }
                 else
                 {
-                    double calories = dietInfo.Calories;
+                    double calories = symptomsResults[0].Calories;
                     if (results[i].Calories <= calories)
                     {
                         foodGoodCount++;
@@ -709,6 +704,8 @@ namespace Microsoft.Bot.Sample.LuisBot
 
             }
 
+            await context.PostAsync(printResultToUser);
+            context.Wait(MessageReceived);
 
 
 
@@ -719,7 +716,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
 
 
-    */
+
 
 
 
