@@ -85,8 +85,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         // flags for Diet.Query
         bool Invoked = false;
         // tracking on user age group, set deafult as adult
-        static DietData AgeGroupDiet = new DietData();
-        List<string> CachedNutri2 = new List<string>();
+        static List<DietData> AgeGroupDiet = new List<DietData>();
 
         // ========================================================================
 
@@ -154,7 +153,8 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         // selection class for confirmation
-        private enum ConfirmOption {
+        private enum ConfirmOption
+        {
             Yes, No
         }
 
@@ -255,6 +255,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 AskedForFood = true;
 
                 IList<FoodData> results = await FoodInfoQuery(foods);
+
                 AddFoods(results);
 
                 for (int i = 0; i < results.Count; i++)
@@ -273,9 +274,11 @@ namespace Microsoft.Bot.Sample.LuisBot
                 if (unknownFoods.Count > 0)
                 {
                     reply += "\nOops, I coudn't find any info on ";
-                    for (int i = 0; i < unknownFoods.Count; i++)
-                        reply += $"{unknownFoods[i]}{((unknownFoods.Count > 1) ? (i != (unknownFoods.Count - 2)) ? ", " : " and " : "")}";
-                    reply += ".";
+                    foreach (string food in unknownFoods)
+                    {
+                        reply += $"{food}, ";
+                    }
+                    reply = reply.Substring(0, reply.Length - 2) + ".";
                 }
             }
             // else handling no food match with food.name entity
@@ -300,7 +303,8 @@ namespace Microsoft.Bot.Sample.LuisBot
 
                         IntentFin = true;
 
-                    } else // handing there is no food being quried beforehand
+                    }
+                    else // handing there is no food being quried beforehand
                     {
                         IntentFin = false;
                         // asking for food if this is first time user query does not contain foods
@@ -374,16 +378,16 @@ namespace Microsoft.Bot.Sample.LuisBot
                             reply += $"{results[i].RowKey} contain\n";
                             for (int j = 0; j < nutris.Count; j++)
                             {
-                                reply += $"{GetFoodNutrition(results[i], nutris[j])} " +
-                                    $"{(nutris[j].Equals("calories") ? "kCal" : "grams")} of {nutris[j]}\n";
+                                reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
                             }
                             reply += "\n";
                         }
                     }
                     reply = reply.Substring(0, reply.Length - 2);
 
-                // else if user is prompted for nutrition
-                } else if (AskedForNutri)
+                    // else if user is prompted for nutrition
+                }
+                else if (AskedForNutri)
                 {
                     if (nutris.Count > 0)
                     {
@@ -398,24 +402,25 @@ namespace Microsoft.Bot.Sample.LuisBot
                                 reply += $"{results[i].RowKey} contain\n";
                                 for (int j = 0; j < nutris.Count; j++)
                                 {
-                                    reply += $"{GetFoodNutrition(results[i], nutris[j])} " +
-                                        $"{(nutris[j].Equals("calories") ? "kCal" : "grams")} of {nutris[j]}\n";
+                                    reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
                                 }
                                 reply += "\n";
                             }
                         }
                         reply = reply.Substring(0, reply.Length - 2);
 
-                    } else
+                    }
+                    else
                     {
                         reply += "Seems like we didn't spot any valid nutrition. Mind trying again?";
                         IntentFin = false;
                     }
-                
-                // else if user is prompted for foods
-                } else if (AskedForFood2)
+
+                    // else if user is prompted for foods
+                }
+                else if (AskedForFood2)
                 {
-                    if(foods.Count > 0)
+                    if (foods.Count > 0)
                     {
                         AskedForFood2 = false;
                         results = await FoodInfoQuery(foods);
@@ -428,20 +433,20 @@ namespace Microsoft.Bot.Sample.LuisBot
                                 reply += $"{results[i].RowKey} contain\n";
                                 for (int j = 0; j < CachedNutri.Count; j++)
                                 {
-                                    reply += $"{GetFoodNutrition(results[i], CachedNutri[j])} " +
-                                        $"{(CachedNutri[j].Equals("calories") ? "kCal" : "gram")} of {CachedNutri[j]}\n";
+                                    reply += $"{GetFoodNutrition(results[i], CachedNutri[j])} grams of {CachedNutri[j]}\n";
                                 }
                                 reply += "\n";
                             }
                         }
                         reply = reply.Substring(0, reply.Length - 2);
 
-                    } else
+                    }
+                    else
                     {
                         reply += "Hmmm, we don't see any foods. Mind trying again?";
                         IntentFin = false;
                     }
-                    
+
                 }
             }
             // handing utterance does not contain either food or nutrition
@@ -449,7 +454,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 // handling followup utterances
                 IList<string> FollowUpKey = GetEntities("User.FollowUp", result);
-                if (FollowUpKey.Count > 0 && foods.Count == 0 && 
+                if (FollowUpKey.Count > 0 && foods.Count == 0 &&
                     nutris.Count > 0 && IntentFin)
                 {
                     // handling nutrition query on most recent queried foods
@@ -461,8 +466,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                             reply += $"{RecentFoods[i].RowKey} contain\n";
                             for (int j = 0; j < nutris.Count; j++)
                             {
-                                reply += $"{GetFoodNutrition(RecentFoods[i], nutris[j])} " +
-                                    $"{(nutris[j].Equals("calories") ? "kCal" : "grams")} of {nutris[j]}\n";
+                                reply += $"{GetFoodNutrition(RecentFoods[i], nutris[j])} grams of {nutris[j]}\n";
                             }
                             reply += "\n";
                         }
@@ -472,7 +476,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                         context.Wait(MessageReceived);
                         return;
 
-                    } else
+                    }
+                    else
                     {
                         // PASS TO else if (foods.Count == 0 && nutris.Count > 0)
                     }
@@ -491,10 +496,10 @@ namespace Microsoft.Bot.Sample.LuisBot
                     CachedNutri.Clear();
                     CachedNutri.AddRange(nutris);
 
-                    for (int i = 0; i < CachedNutri.Count; i++)
-                        reply += $"{CachedNutri[i]}{((CachedNutri.Count > 1) ? (i != (CachedNutri.Count - 2)) ? ", " : " and " : "")}";
+                    foreach (string nutri in CachedNutri)
+                        reply += $"{nutri}, ";
 
-                    reply += " of which food you want to find out?";
+                    reply = $"{reply.Substring(0, reply.Length - 2)} of which food you want to find out?";
                     AskedForFood2 = true;
 
                 }
@@ -506,10 +511,11 @@ namespace Microsoft.Bot.Sample.LuisBot
                     CachedFood.AddRange(foods);
 
                     reply += "Displaying all nutrition info for ";
-                    for (int i = 0; i < foods.Count; i++) 
+                    foreach (string food in foods)
                     {
-                        reply += $"{foods[i]}{((foods.Count > 1) ? (i != (foods.Count - 2)) ? ", " : " and " : "")}";
+                        reply += $"{food}, ";
                     }
+                    reply = reply.Substring(0, reply.Length - 2);
                     reply += "?";
 
                     // confirmation for disaplying all ingo
@@ -558,15 +564,18 @@ namespace Microsoft.Bot.Sample.LuisBot
                 if (unknownFoods.Count > 0)
                 {
                     reply += "Oops, I coudn't find any info on ";
-                    for (int j = 0; j < unknownFoods.Count; j++)
-                        reply += $"{unknownFoods[j]}{((unknownFoods.Count > 1) ? (j != (unknownFoods.Count - 2)) ? ", " : " and " : "")}";
-                    reply += ".";
+                    foreach (string food in unknownFoods)
+                    {
+                        reply += $"{food}, ";
+                    }
+                    reply = reply.Substring(0, reply.Length - 2) + ".";
                 }
 
                 IntentFin = true;
                 await context.PostAsync(reply);
 
-            } else // handing prompting for only specific nutritions
+            }
+            else // handing prompting for only specific nutritions
             {
                 AskedForNutri = true;
                 IntentFin = false;
@@ -589,94 +598,25 @@ namespace Microsoft.Bot.Sample.LuisBot
             IList<string> foods = GetEntities("Food.Name", result);
             IList<string> nutris = GetEntities("Food.Nutri", result);
             IList<string> group = GetEntities("User.Group", result);
-            IList<string> followup = GetEntities("User.FollowUp", result);
 
-            // if this intent is invoked before or having age group query
-            if (!Invoked || group.Count > 0)
+            if (!Invoked)
             {
-                // update to the age group mentioned
-                if (group.Count > 0)
-                    AgeGroupDiet = await DietInfoQuery("User.Diet", group[0]);
-                // else, set to default age group
-                else if (!Invoked)
-                    AgeGroupDiet = await DietInfoQuery("User.Diet", "adult");
                 Invoked = true;
-            }
-
-            if (!MatchIntent(result, new string[] { "Again", "None" }))
-            {
-                lastIntent = result.Intents[0].Intent;
+                DietData buffer = await DietInfoQuery("User.Diet", "adult");
+                AgeGroupDiet.Add(buffer);
             }
 
             string reply = "";
-            double ratio = 0.33;
-            string[] extent = { "rather low", "moderate", "moderate", "high", "rather high" };
+            double ratio = 0.3;
 
-            IList<FoodData> results;
-            // if it is not a followup utterances or a followup utterance for another foods
-            if ((followup.Count == 0 && foods.Count > 0) || (followup.Count > 0 && foods.Count > 0 && CachedNutri2.Count > 0))
+            // handling normal complete utterance
+            if (foods.Count > 0 && nutris.Count > 0)
             {
-                results = await FoodInfoQuery(foods);
-                AddFoods(results);
-            } else // else it is a followup utterance with another nutrition
-            {
-                // if there is already previous food quried
-                if (PrevFoods.Count > 0 && IntentFin)
-                    results = GetRecentFoods();
-                else
-                {
-                    reply += "Sure, but please make some queries first.";
-                    await context.PostAsync(reply);
-                    context.Wait(MessageReceived);
-                    return;
-                }
-            }
-
-            // managing cache for nutrition
-            if (nutris.Count > 0)
-            {
-                CachedNutri2.Clear();
-                CachedNutri2.AddRange(nutris);
+                reply += AgeGroupDiet[0].GetFullDiet();
             }
             else
-                nutris = CachedNutri2;
-
-            // handling normal complete utterance iwith only one food with more than one nutritions 
-            // conditions:
-            // 1. it is a complete full utterance
-            // 2. It is a followup utterance
-            // 3. It is specified with a age group and have previous food queried
-            if ((foods.Count > 0 && nutris.Count > 0) || (nutris.Count > 0 && followup.Count > 0) || (PrevFoods.Count > 0 && group.Count > 0))
             {
-                reply += $"For a single meal of normal {AgeGroupDiet.RowKey},";
-                for (int k = 0; k < results.Count; k++)
-                {
-                    reply += $"\n{results[k].RowKey} has ";
-                    for (int i = 0; i < nutris.Count; i++)
-                    {
-                        double baseline = GetFoodNutrition(AgeGroupDiet, nutris[i]) * ratio;
-                        double currentNutri = GetFoodNutrition(results[k], nutris[i]);
-                        for (double j = 0.2; j <= 1; j += 0.2)
-                        {
-                            if (baseline * j > currentNutri)
-                            {
-                                reply += $"{extent[(int)(j / 0.2 - 1)]} ({currentNutri}{(nutris[i].Equals("calories") ? "kCal" : "g")})";
-                                break;
-                            }
-                        }
-                        if (baseline < GetFoodNutrition(results[k], nutris[i]))
-                            reply += $"{extent[4]} ({currentNutri}{(nutris[i].Equals("calories") ? "kCal" : "g")})";
-                        reply += $" {nutris[i]}{((nutris.Count > 1)?(i != (nutris.Count - 2)) ? ", " : " and " : "")}";
-                    }
-                    reply += ",";
-                }
-                reply = reply.Substring(0, reply.Length - 1) + ".";
-                IntentFin = true;
-            } else // pass to Nutri.Query intent if anything missing in utterances
-            {
-                lastIntent = "Nutri.Query";
-                await NutriQueryIntent(context, result);
-                return;
+                reply += "MOM";
             }
 
             await context.PostAsync(reply);
@@ -686,7 +626,106 @@ namespace Microsoft.Bot.Sample.LuisBot
         [LuisIntent("Symptoms.Food.Query")]
         public async Task SymptomsFoodQueryIntent(IDialogContext context, LuisResult result)
         {
-            await this.ShowLuisResult(context, result);
+
+            IList<string> foods = GetEntities("Food.Name", result);
+            IList<string> symptoms = GetEntities("User.Symptoms", result);
+            IList<FoodData> results = await FoodInfoQuery(foods);
+            IList<SymptomsData> symptomsResults = await SymptomsInfoQuery(symptoms);
+            
+            
+           
+
+
+
+            //  int[] foodResult = new int[foods.Count];
+            String printResultToUser = "";
+
+
+            for (int i = 0; i < foods.Count; i++)
+            {
+                int foodGoodCount = 0;
+                if (string.Equals(symptoms[0], "constipation"))
+                {
+                    double carbohydrate = symptomsResults[0].Carbohydrate;
+                    double fat = symptomsResults[0].Fat;
+                    double fibre = symptomsResults[0].Fibre;
+                    double protein = symptomsResults[0].Protein;
+
+                    if (results[i].Carbohydrate >= carbohydrate)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (results[i].Fat >= fat)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (results[i].Fibre <= fibre)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (results[i].Protein <= protein)
+                    {
+                        foodGoodCount++;
+                    }
+
+                    if (foodGoodCount >= 3)
+                        printResultToUser += foods[i] + " is good for constipation person \n";
+                    else
+                        printResultToUser += foods[i] + " is not good for constipation person \n";
+                }
+                else if (string.Equals(symptoms[0], "diabetes"))
+                {
+                    double carbohydrate = symptomsResults[0].Carbohydrate;
+                    double sugar = symptomsResults[0].Sugar;
+
+                    if (results[i].Carbohydrate <= carbohydrate)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (results[i].Sugar <= sugar)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (foodGoodCount >= 2)
+                        printResultToUser += foods[i] + " is good for diabetes person \n";
+                    else
+                        printResultToUser += foods[i] + " is not good for diabetes person \n";
+
+
+
+                }
+                else
+                {
+                    double calories = symptomsResults[0].Calories;
+                    if (results[i].Calories <= calories)
+                    {
+                        foodGoodCount++;
+                    }
+                    if (foodGoodCount >= 1)
+                        printResultToUser += foods[i] + " is good for obesity person \n";
+                    else
+                        printResultToUser += foods[i] + " is not good for obesity person \n";
+
+                }
+
+            }
+
+            await context.PostAsync(printResultToUser);
+            context.Wait(MessageReceived);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         }
 
         [LuisIntent("Finish")]
@@ -711,7 +750,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
             // resetting all flags and caches
             ResetFlags();
-            
+
             await context.PostAsync("Alright, we heared you.\nDo you still wanna stay with us?");
             // TODO yes/no option
             context.Wait(MessageReceived);
@@ -721,7 +760,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         private void ResetFlags()
         {
             IntentFin = true;
-            switch(lastIntent)
+            switch (lastIntent)
             {
                 case "Calories.Query":
                     AskedForFood = false;
@@ -732,11 +771,6 @@ namespace Microsoft.Bot.Sample.LuisBot
                     AskedForFood2 = false;
                     CachedFood.Clear();
                     CachedNutri.Clear();
-                    break;
-
-                case "Diet.Query":
-                    Invoked = false;
-                    CachedNutri2.Clear();
                     break;
 
                 default:
@@ -757,10 +791,6 @@ namespace Microsoft.Bot.Sample.LuisBot
 
                 case "Nutri.Query":
                     await NutriQueryIntent(context, result);
-                    break;
-
-                case "Diet.Query":
-                    await DietQueryIntent(context, result);
                     break;
 
                 case "None":
@@ -815,8 +845,10 @@ namespace Microsoft.Bot.Sample.LuisBot
             return entities;
         }
 
-        private bool MatchIntent(LuisResult result, string[] intents) {
-            foreach (string intent in intents) {
+        private bool MatchIntent(LuisResult result, string[] intents)
+        {
+            foreach (string intent in intents)
+            {
                 if (result.Intents[0].Intent.CompareTo(intent) == 0)
                     return true;
             }
@@ -880,6 +912,32 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
 
         }
+        private async Task<IList<SymptomsData>> SymptomsInfoQuery(IList<string> symptoms)
+        {
+
+            IList<SymptomsData> results = new List<SymptomsData>();
+
+            foreach (var food in symptoms)
+            {
+
+                TableOperation retrieveOp = TableOperation.Retrieve<SymptomsData>("Symptoms.Food.Query ", food);
+                TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
+
+                if (retrievedResult.Result != null)
+                {
+                    results.Add((SymptomsData)retrievedResult.Result);
+                }
+                // else, handling food not found in FoodData db
+                else
+                {
+                    results.Add(null);
+                }
+
+            }
+
+            return results;
+
+        }
 
         // retrieve specific nutrition of a food
         private double GetFoodNutrition(FoodData f, string nutri)
@@ -898,31 +956,6 @@ namespace Microsoft.Bot.Sample.LuisBot
                     return f.Sodium;
                 case "fibre":
                     return f.Fibre;
-                case "calories":
-                    return f.Calories;
-                default:
-                    return -1;
-            }
-        }
-
-        private double GetFoodNutrition(DietData f, string nutri)
-        {
-            switch (nutri)
-            {
-                case "protein":
-                    return f.Protein;
-                case "fat":
-                    return f.Fat;
-                case "carbohydrate":
-                    return f.Carbohydrate;
-                case "sugar":
-                    return f.Sugar;
-                case "sodium":
-                    return f.Sodium;
-                case "fibre":
-                    return f.Fibre;
-                case "calories":
-                    return f.Calories;
                 default:
                     return -1;
             }
@@ -956,7 +989,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
 
             // append only if there is at least one positive result in previous query
-            if(food.Count > 0)
+            if (food.Count > 0)
                 PrevFoods.Add(food);
         }
 
@@ -966,14 +999,14 @@ namespace Microsoft.Bot.Sample.LuisBot
             return PrevFoods[PrevFoods.Count - 1];
         }
     }
-    
+
     // Deserializable class for QnA response
     public class Metadata
     {
         public string name { get; set; }
         public string value { get; set; }
     }
-    
+
     public class Answer
     {
         public IList<string> questions { get; set; }
@@ -984,12 +1017,12 @@ namespace Microsoft.Bot.Sample.LuisBot
         public IList<object> keywords { get; set; }
         public IList<Metadata> metadata { get; set; }
     }
-    
+
     public class QnAAnswer
     {
         public IList<Answer> answers { get; set; }
     }
-    
+
     // Http request to QnA Maker service
     [Serializable]
     public class QnAMakerService
@@ -997,15 +1030,15 @@ namespace Microsoft.Bot.Sample.LuisBot
         private string qnaServiceHostName;
         private string knowledgeBaseId;
         private string endpointKey;
-    
+
         public QnAMakerService(string hostName, string kbId, string endpointkey)
         {
             qnaServiceHostName = hostName;
             knowledgeBaseId = kbId;
             endpointKey = endpointkey;
-    
+
         }
-        
+
         async Task<string> Post(string uri, string body)
         {
             using (var client = new HttpClient())
@@ -1015,19 +1048,19 @@ namespace Microsoft.Bot.Sample.LuisBot
                 request.RequestUri = new Uri(uri);
                 request.Content = new StringContent(body, Encoding.UTF8, "application/json");
                 request.Headers.Add("Authorization", "EndpointKey " + endpointKey);
-    
+
                 var response = await client.SendAsync(request);
-                return  await response.Content.ReadAsStringAsync();
+                return await response.Content.ReadAsStringAsync();
             }
         }
-        
+
         public async Task<string> GetAnswer(string question)
         {
             string uri = qnaServiceHostName + "/qnamaker/knowledgebases/" + knowledgeBaseId + "/generateAnswer";
-            string questionJSON = "{\"question\": \"" + question.Replace("\"","'") +  "\"}";
-    
+            string questionJSON = "{\"question\": \"" + question.Replace("\"", "'") + "\"}";
+
             var response = await Post(uri, questionJSON);
-    
+
             var answers = JsonConvert.DeserializeObject<QnAAnswer>(response);
             if (answers.answers.Count > 0)
             {
@@ -1064,8 +1097,8 @@ namespace Microsoft.Bot.Sample.LuisBot
 
         public override string ToString()
         {
-            return "FoodType : " + FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories + 
-                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " + 
+            return "FoodType : " + FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories +
+                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " +
                 this.Protein + "\nCarbohydrate : " + this.Carbohydrate + "\nFibre : " + this.Fibre;
         }
 
@@ -1079,7 +1112,7 @@ namespace Microsoft.Bot.Sample.LuisBot
     // diet table entity class
     public class DietData : TableEntity
     {
-        
+
         public DietData(string domain, string id)
         {
             this.PartitionKey = domain; //ENTITY NAME
@@ -1087,6 +1120,40 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         public DietData() { }
+
+        public double Calories { get; set; }
+        public double Fat { get; set; }
+        public double Sugar { get; set; }
+        public double Sodium { get; set; }
+        public double Protein { get; set; }
+        public double Carbohydrate { get; set; }
+        public double Fibre { get; set; }
+
+        public override string ToString()
+        {
+            return "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories +
+                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " +
+                this.Protein + "\nCarbohydrate : " + this.Carbohydrate + "\nFibre : " + this.Fibre;
+        }
+
+        public string GetFullDiet()
+        {
+            return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} " +
+                $"g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\nFibre: {Fibre} g\n";
+        }
+    }
+
+    // Sysmptoms table entity class
+    public class SymptomsData : TableEntity
+    {
+
+        public SymptomsData(string domain, string id)
+        {
+            this.PartitionKey = domain; //ENTITY NAME
+            this.RowKey = id; //FOOD NAME, USER GROUP, SYMPTOM NAME
+        }
+
+        public SymptomsData() { }
 
         public double Calories { get; set; }
         public double Fat { get; set; }
