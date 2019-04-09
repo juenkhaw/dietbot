@@ -368,7 +368,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                             reply += $"{results[i].RowKey} contain\n";
                             for (int j = 0; j < nutris.Count; j++)
                             {
-                                reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
+                                reply += $"{GetFoodNutrition(results[i], nutris[j])} " +
+                                    $"{(nutris[j].Equals("calories") ? "kCal" : "grams")} of {nutris[j]}\n";
                             }
                             reply += "\n";
                         }
@@ -391,7 +392,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                                 reply += $"{results[i].RowKey} contain\n";
                                 for (int j = 0; j < nutris.Count; j++)
                                 {
-                                    reply += $"{GetFoodNutrition(results[i], nutris[j])} grams of {nutris[j]}\n";
+                                    reply += $"{GetFoodNutrition(results[i], nutris[j])} " +
+                                        $"{(nutris[j].Equals("calories") ? "kCal" : "grams")} of {nutris[j]}\n";
                                 }
                                 reply += "\n";
                             }
@@ -420,7 +422,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                                 reply += $"{results[i].RowKey} contain\n";
                                 for (int j = 0; j < CachedNutri.Count; j++)
                                 {
-                                    reply += $"{GetFoodNutrition(results[i], CachedNutri[j])} grams of {CachedNutri[j]}\n";
+                                    reply += $"{GetFoodNutrition(results[i], CachedNutri[j])} " +
+                                        $"{(CachedNutri[j].Equals("calories") ? "kCal" : "gram")} of {CachedNutri[j]}\n";
                                 }
                                 reply += "\n";
                             }
@@ -452,7 +455,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                             reply += $"{RecentFoods[i].RowKey} contain\n";
                             for (int j = 0; j < nutris.Count; j++)
                             {
-                                reply += $"{GetFoodNutrition(RecentFoods[i], nutris[j])} grams of {nutris[j]}\n";
+                                reply += $"{GetFoodNutrition(RecentFoods[i], nutris[j])} " +
+                                    $"{(nutris[j].Equals("calories") ? "kCal" : "grams")} of {nutris[j]}\n";
                             }
                             reply += "\n";
                         }
@@ -603,12 +607,12 @@ namespace Microsoft.Bot.Sample.LuisBot
             string[] extent = { "rather low", "moderate", "moderate", "high", "rather high" };
 
             IList<FoodData> results;
-            // if it is not a followup utterances
-            if (followup.Count == 0 && foods.Count > 0)
+            // if it is not a followup utterances or a followup utterance for another foods
+            if ((followup.Count == 0 && foods.Count > 0) || (followup.Count > 0 && foods.Count > 0 && CachedNutri2.Count > 0))
             {
                 results = await FoodInfoQuery(foods);
                 AddFoods(results);
-            } else
+            } else // else it is a followup utterance with another nutrition
             {
                 // if there is already previous food quried
                 if (PrevFoods.Count > 0 && IntentFin)
@@ -650,12 +654,12 @@ namespace Microsoft.Bot.Sample.LuisBot
                         {
                             if (baseline * j > currentNutri)
                             {
-                                reply += $"{extent[(int)(j / 0.2 - 1)]} ({currentNutri}g)";
+                                reply += $"{extent[(int)(j / 0.2 - 1)]} ({currentNutri}{(nutris[i].Equals("calories") ? "kCal" : "g")})";
                                 break;
                             }
                         }
                         if (baseline < GetFoodNutrition(results[k], nutris[i]))
-                            reply += $"{extent[4]} ({currentNutri}g)";
+                            reply += $"{extent[4]} ({currentNutri}{(nutris[i].Equals("calories") ? "kCal" : "g")})";
                         reply += $" {nutris[i]}{((nutris.Count > 1)?(i != (nutris.Count - 2)) ? ", " : " and " : "")}";
                     }
                     reply += ",";
@@ -726,6 +730,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
                 case "Diet.Query":
                     Invoked = false;
+                    CachedNutri2.Clear();
                     break;
 
                 default:
@@ -887,6 +892,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                     return f.Sodium;
                 case "fibre":
                     return f.Fibre;
+                case "calories":
+                    return f.Calories;
                 default:
                     return -1;
             }
@@ -908,6 +915,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                     return f.Sodium;
                 case "fibre":
                     return f.Fibre;
+                case "calories":
+                    return f.Calories;
                 default:
                     return -1;
             }
