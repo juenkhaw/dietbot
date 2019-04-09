@@ -1140,7 +1140,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
     }
 
-    // diet table entity class
+    // Sysmptoms table entity class
     public class SymptomsData : TableEntity
     {
 
