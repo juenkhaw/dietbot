@@ -153,7 +153,8 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         // selection class for confirmation
-        private enum ConfirmOption {
+        private enum ConfirmOption
+        {
             Yes, No
         }
 
@@ -279,8 +280,8 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 // handing follow-up uttereances
                 IList<string> FollowUpKey = GetEntities("User.FollowUp", result);
-                if (FollowUpKey.Count > 0 && foods.Count == 0 && 
-                    !MatchIntent(lastIntent, new string[] { "Calories.Query" }) && 
+                if (FollowUpKey.Count > 0 && foods.Count == 0 &&
+                    !MatchIntent(lastIntent, new string[] { "Calories.Query" }) &&
                     IntentFin)
                 {
                     // handing query on most recent queried foods
@@ -295,7 +296,8 @@ namespace Microsoft.Bot.Sample.LuisBot
 
                         IntentFin = true;
 
-                    } else // handing there is no food being quried beforehand
+                    }
+                    else // handing there is no food being quried beforehand
                     {
                         IntentFin = false;
                         // asking for food if this is first time user query does not contain foods
@@ -377,8 +379,9 @@ namespace Microsoft.Bot.Sample.LuisBot
                     }
                     reply = reply.Substring(0, reply.Length - 2);
 
-                // else if user is prompted for nutrition
-                } else if (AskedForNutri)
+                    // else if user is prompted for nutrition
+                }
+                else if (AskedForNutri)
                 {
                     if (nutris.Count > 0)
                     {
@@ -400,16 +403,18 @@ namespace Microsoft.Bot.Sample.LuisBot
                         }
                         reply = reply.Substring(0, reply.Length - 2);
 
-                    } else
+                    }
+                    else
                     {
                         reply += "Seems like we didn't spot any valid nutrition. Mind trying again?";
                         IntentFin = false;
                     }
-                
-                // else if user is prompted for foods
-                } else if (AskedForFood2)
+
+                    // else if user is prompted for foods
+                }
+                else if (AskedForFood2)
                 {
-                    if(foods.Count > 0)
+                    if (foods.Count > 0)
                     {
                         AskedForFood2 = false;
                         results = await FoodInfoQuery(foods);
@@ -429,12 +434,13 @@ namespace Microsoft.Bot.Sample.LuisBot
                         }
                         reply = reply.Substring(0, reply.Length - 2);
 
-                    } else
+                    }
+                    else
                     {
                         reply += "Hmmm, we don't see any foods. Mind trying again?";
                         IntentFin = false;
                     }
-                    
+
                 }
             }
             // handing utterance does not contain either food or nutrition
@@ -442,7 +448,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 // handling followup utterances
                 IList<string> FollowUpKey = GetEntities("User.FollowUp", result);
-                if (FollowUpKey.Count > 0 && foods.Count == 0 && 
+                if (FollowUpKey.Count > 0 && foods.Count == 0 &&
                     nutris.Count > 0 && IntentFin)
                 {
                     // handling nutrition query on most recent queried foods
@@ -464,7 +470,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                         context.Wait(MessageReceived);
                         return;
 
-                    } else
+                    }
+                    else
                     {
                         // PASS TO else if (foods.Count == 0 && nutris.Count > 0)
                     }
@@ -561,7 +568,8 @@ namespace Microsoft.Bot.Sample.LuisBot
                 IntentFin = true;
                 await context.PostAsync(reply);
 
-            } else // handing prompting for only specific nutritions
+            }
+            else // handing prompting for only specific nutritions
             {
                 AskedForNutri = true;
                 IntentFin = false;
@@ -599,7 +607,8 @@ namespace Microsoft.Bot.Sample.LuisBot
             if (foods.Count > 0 && nutris.Count > 0)
             {
                 reply += AgeGroupDiet[0].GetFullDiet();
-            } else
+            }
+            else
             {
                 reply += "MOM";
             }
@@ -613,16 +622,29 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
 
             IList<string> foods = GetEntities("Food.Name", result);
-            IList<string> symptoms = GetEntities("Symptoms.Food.Query ", result);
+            IList<string> symptoms = GetEntities("User.Symptoms", result);
+            await context.PostAsync("able to get" + foods.Count + "," + "able to get" + symptoms.Count);
+            context.Wait(MessageReceived);
+
             IList<FoodData> results = await FoodInfoQuery(foods);
-            DietData dietInfo = await DietInfoQuery("Symptoms.Food.Query", symptoms[0]);
-            int[] foodResult = new int[foods.Count];
+            await context.PostAsync("able to get" + results.Count);
+            context.Wait(MessageReceived);
+
+            IList<SymptomsData> symptomsResults = await SymptomsInfoQuery(symptoms);
+            await context.PostAsync( "Able to get "+symptomsResults.Count);
+            context.Wait(MessageReceived);
+
+
+/*
+            //  int[] foodResult = new int[foods.Count];
             String printResultToUser = "";
 
-            for (int i=0; i < foods.Count; i++)
+
+            for (int i = 0; i < foods.Count; i++)
             {
                 int foodGoodCount = 0;
-                if (string.Equals(symptoms[0], "constipation")){
+                if (string.Equals(symptoms[0], "constipation"))
+                {
                     double carbohydrate = dietInfo.Carbohydrate;
                     double fat = dietInfo.Fat;
                     double fibre = dietInfo.Fibre;
@@ -632,15 +654,15 @@ namespace Microsoft.Bot.Sample.LuisBot
                     {
                         foodGoodCount++;
                     }
-                    if(results[i].Fat>= fat)
+                    if (results[i].Fat >= fat)
                     {
                         foodGoodCount++;
                     }
-                    if(results[i].Fibre <= fibre)
+                    if (results[i].Fibre <= fibre)
                     {
                         foodGoodCount++;
                     }
-                    if(results[i].Protein <= protein)
+                    if (results[i].Protein <= protein)
                     {
                         foodGoodCount++;
                     }
@@ -655,11 +677,11 @@ namespace Microsoft.Bot.Sample.LuisBot
                     double carbohydrate = dietInfo.Carbohydrate;
                     double sugar = dietInfo.Sugar;
 
-                    if(results[i].Carbohydrate <= carbohydrate)
+                    if (results[i].Carbohydrate <= carbohydrate)
                     {
                         foodGoodCount++;
                     }
-                    if(results[i].Sugar <= sugar)
+                    if (results[i].Sugar <= sugar)
                     {
                         foodGoodCount++;
                     }
@@ -674,7 +696,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 else
                 {
                     double calories = dietInfo.Calories;
-                    if(results[i].Calories <= calories)
+                    if (results[i].Calories <= calories)
                     {
                         foodGoodCount++;
                     }
@@ -690,8 +712,6 @@ namespace Microsoft.Bot.Sample.LuisBot
 
 
 
-            await context.PostAsync(printResultToUser);
-            context.Wait(MessageReceived);
 
 
 
@@ -699,6 +719,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
 
 
+    */
 
 
 
@@ -726,7 +747,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         {
             // resetting all flags and caches
             ResetFlags();
-            
+
             await context.PostAsync("Alright, we heared you.\nDo you still wanna stay with us?");
             // TODO yes/no option
             context.Wait(MessageReceived);
@@ -736,7 +757,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         private void ResetFlags()
         {
             IntentFin = true;
-            switch(lastIntent)
+            switch (lastIntent)
             {
                 case "Calories.Query":
                     AskedForFood = false;
@@ -821,8 +842,10 @@ namespace Microsoft.Bot.Sample.LuisBot
             return entities;
         }
 
-        private bool MatchIntent(LuisResult result, string[] intents) {
-            foreach (string intent in intents) {
+        private bool MatchIntent(LuisResult result, string[] intents)
+        {
+            foreach (string intent in intents)
+            {
                 if (result.Intents[0].Intent.CompareTo(intent) == 0)
                     return true;
             }
@@ -886,6 +909,32 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
 
         }
+        private async Task<IList<SymptomsData>> SymptomsInfoQuery(IList<string> symptoms)
+        {
+
+            IList<SymptomsData> results = new List<SymptomsData>();
+
+            foreach (var food in symptoms)
+            {
+
+                TableOperation retrieveOp = TableOperation.Retrieve<SymptomsData>("Symptoms.Food.Query ", food);
+                TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
+
+                if (retrievedResult.Result != null)
+                {
+                    results.Add((SymptomsData)retrievedResult.Result);
+                }
+                // else, handling food not found in FoodData db
+                else
+                {
+                    results.Add(null);
+                }
+
+            }
+
+            return results;
+
+        }
 
         // retrieve specific nutrition of a food
         private double GetFoodNutrition(FoodData f, string nutri)
@@ -937,7 +986,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             }
 
             // append only if there is at least one positive result in previous query
-            if(food.Count > 0)
+            if (food.Count > 0)
                 PrevFoods.Add(food);
         }
 
@@ -947,14 +996,14 @@ namespace Microsoft.Bot.Sample.LuisBot
             return PrevFoods[PrevFoods.Count - 1];
         }
     }
-    
+
     // Deserializable class for QnA response
     public class Metadata
     {
         public string name { get; set; }
         public string value { get; set; }
     }
-    
+
     public class Answer
     {
         public IList<string> questions { get; set; }
@@ -965,12 +1014,12 @@ namespace Microsoft.Bot.Sample.LuisBot
         public IList<object> keywords { get; set; }
         public IList<Metadata> metadata { get; set; }
     }
-    
+
     public class QnAAnswer
     {
         public IList<Answer> answers { get; set; }
     }
-    
+
     // Http request to QnA Maker service
     [Serializable]
     public class QnAMakerService
@@ -978,15 +1027,15 @@ namespace Microsoft.Bot.Sample.LuisBot
         private string qnaServiceHostName;
         private string knowledgeBaseId;
         private string endpointKey;
-    
+
         public QnAMakerService(string hostName, string kbId, string endpointkey)
         {
             qnaServiceHostName = hostName;
             knowledgeBaseId = kbId;
             endpointKey = endpointkey;
-    
+
         }
-        
+
         async Task<string> Post(string uri, string body)
         {
             using (var client = new HttpClient())
@@ -996,19 +1045,19 @@ namespace Microsoft.Bot.Sample.LuisBot
                 request.RequestUri = new Uri(uri);
                 request.Content = new StringContent(body, Encoding.UTF8, "application/json");
                 request.Headers.Add("Authorization", "EndpointKey " + endpointKey);
-    
+
                 var response = await client.SendAsync(request);
-                return  await response.Content.ReadAsStringAsync();
+                return await response.Content.ReadAsStringAsync();
             }
         }
-        
+
         public async Task<string> GetAnswer(string question)
         {
             string uri = qnaServiceHostName + "/qnamaker/knowledgebases/" + knowledgeBaseId + "/generateAnswer";
-            string questionJSON = "{\"question\": \"" + question.Replace("\"","'") +  "\"}";
-    
+            string questionJSON = "{\"question\": \"" + question.Replace("\"", "'") + "\"}";
+
             var response = await Post(uri, questionJSON);
-    
+
             var answers = JsonConvert.DeserializeObject<QnAAnswer>(response);
             if (answers.answers.Count > 0)
             {
@@ -1045,8 +1094,8 @@ namespace Microsoft.Bot.Sample.LuisBot
 
         public override string ToString()
         {
-            return "FoodType : " + FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories + 
-                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " + 
+            return "FoodType : " + FoodType + "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories +
+                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " +
                 this.Protein + "\nCarbohydrate : " + this.Carbohydrate + "\nFibre : " + this.Fibre;
         }
 
@@ -1060,7 +1109,7 @@ namespace Microsoft.Bot.Sample.LuisBot
     // diet table entity class
     public class DietData : TableEntity
     {
-        
+
         public DietData(string domain, string id)
         {
             this.PartitionKey = domain; //ENTITY NAME
@@ -1068,6 +1117,40 @@ namespace Microsoft.Bot.Sample.LuisBot
         }
 
         public DietData() { }
+
+        public double Calories { get; set; }
+        public double Fat { get; set; }
+        public double Sugar { get; set; }
+        public double Sodium { get; set; }
+        public double Protein { get; set; }
+        public double Carbohydrate { get; set; }
+        public double Fibre { get; set; }
+
+        public override string ToString()
+        {
+            return "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories +
+                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " +
+                this.Protein + "\nCarbohydrate : " + this.Carbohydrate + "\nFibre : " + this.Fibre;
+        }
+
+        public string GetFullDiet()
+        {
+            return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} " +
+                $"g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\nFibre: {Fibre} g\n";
+        }
+    }
+
+    // diet table entity class
+    public class SymptomsData : TableEntity
+    {
+
+        public SymptomsData(string domain, string id)
+        {
+            this.PartitionKey = domain; //ENTITY NAME
+            this.RowKey = id; //FOOD NAME, USER GROUP, SYMPTOM NAME
+        }
+
+        public SymptomsData() { }
 
         public double Calories { get; set; }
         public double Fat { get; set; }
