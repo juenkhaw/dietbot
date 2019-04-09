@@ -242,6 +242,12 @@ namespace Microsoft.Bot.Sample.LuisBot
             IList<string> unknownFoods = new List<string>();
             string reply = "";
 
+            // if the trigger is not from Again intent, update the last intent
+            if (!MatchIntent(result, new string[] { "Again", "None" }))
+            {
+                lastIntent = result.Intents[0].Intent;
+            }
+
             // if food.name is detected in user response
             if (foods.Count > 0)
             {
@@ -277,6 +283,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             {
                 // handing follow-up uttereances
                 IList<string> FollowUpKey = GetEntities("User.FollowUp", result);
+                IList<string> Nutris = GetEntities("Food.Nutri", result);
                 if (FollowUpKey.Count > 0 && foods.Count == 0 && 
                     !MatchIntent(lastIntent, new string[] { "Calories.Query" }) && 
                     IntentFin)
@@ -301,6 +308,11 @@ namespace Microsoft.Bot.Sample.LuisBot
                         reply += "Alright, feed us some foods then.";
                     }
                 }
+                else if (Nutris.Count > 0)
+                {
+                    await NutriQueryIntent(context, result);
+                    return;
+                }
                 // handing food not found after user being prompted
                 else if (AskedForFood)
                 {
@@ -316,12 +328,6 @@ namespace Microsoft.Bot.Sample.LuisBot
                     AskedForFood = true;
                     reply += "Alright, feed us some foods then.";
                 }
-            }
-
-            // if the trigger is not from Again intent, update the last intent
-            if (!MatchIntent(result, new string[] { "Again", "None" }))
-            {
-                lastIntent = result.Intents[0].Intent;
             }
 
             await context.PostAsync(reply);
