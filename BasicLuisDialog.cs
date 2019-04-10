@@ -25,7 +25,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
         // LUIS Settings
         static string LUIS_appId = "d54c7abb-3a29-4cbf-bf20-331dce8240aa";
-        static string LUIS_apiKey = "f4a57bb428664071995fc541ce0def61";
+        static string LUIS_apiKey = "fe905b5bda634933879d89355da2dded";
         static string LUIS_hostRegion = "westus.api.cognitive.microsoft.com";
 
         // QnA Maker global settings
@@ -104,6 +104,7 @@ namespace Microsoft.Bot.Sample.LuisBot
         };
 
         // fixed mapping food type <--> food name
+        /*
         static Dictionary<string, List<string>> FoodTypeNameMap = new Dictionary<string, List<string>>
         {
             ["fruits"] = new List<string> { "banana", "apple" },
@@ -112,7 +113,7 @@ namespace Microsoft.Bot.Sample.LuisBot
             ["grains"] = new List<string> { "bread", "rice" },
             ["oils"] = new List<string> { "crackers", "butter" },
             ["dairy"] = new List<string> { "milk", "yogurt" }
-        };
+        };*/
 
         // ========================================================================
 
@@ -737,7 +738,7 @@ namespace Microsoft.Bot.Sample.LuisBot
                 {
                     string key = keysEnumerate.Current;
                     UserDietQuota.Add(key, UserDietNutri[key] / (DietNutri[key] * rate));
-                    reply += $"{key} = {UserDietQuota[key]}\n";
+                    //reply += $"{key} = {UserDietQuota[key]}\n";
                     if (UserDietQuota[key] < lower)
                         NutriLack.Add(key);
                     else if (UserDietQuota[key] > upper)
@@ -1031,10 +1032,120 @@ namespace Microsoft.Bot.Sample.LuisBot
             context.Wait(MessageReceived);
         }
 
+        // terrance
         [LuisIntent("Symptoms.Food.Query")]
         public async Task SymptomsFoodQueryIntent(IDialogContext context, LuisResult result)
         {
-            await this.ShowLuisResult(context, result);
+            if (!MatchIntent(result, new string[] { "Again", "None" }))
+            {
+                lastIntent = result.Intents[0].Intent;
+            }
+
+            IList<string> foods = GetEntities("Food.Name", result);
+            IList<string> symptoms = GetEntities("User.Symptoms", result);
+            IList<String> userFollowUp = GetEntities("User.FollowUp", result);
+            IList<FoodData> results;
+            if (userFollowUp.Count != 0 && (foods.Count == 0 || symptoms.Count == 0) && PrevFoods.Count != 0)
+            {
+                results = GetRecentFoods();
+            }
+            else
+            {
+                results = await FoodInfoQuery(foods);
+                AddFoods(results);
+
+            }
+
+            Boolean printCounter = true;
+
+            IList<SymptomsData> symptomsResults = await SymptomsInfoQuery(symptoms);
+            if (symptomsResults.Count != 0)
+            {
+                String printResultToUser = "";
+
+
+                for (int i = 0; i < results.Count; i++)
+                {
+                    if (results[i] != null)
+                    {
+                        int foodGoodCount = 0;
+                        if (string.Equals(symptoms[0], "constipation"))
+                        {
+
+                            double fibre = symptomsResults[0].Fibre;
+                            double protein = symptomsResults[0].Protein;
+
+                            if (results[i].Fibre >= fibre)
+                            {
+                                foodGoodCount++;
+                            }
+                            if (results[i].Protein >= protein)
+                            {
+                                foodGoodCount++;
+                            }
+
+                            if (foodGoodCount >= 2)
+                                printResultToUser += results[i].RowKey + " is **highly recommended**  for constipation person \n";
+                            else
+                                printResultToUser += results[i].RowKey + " is **not recommended**  for constipation person \n";
+                        }
+                        else if (string.Equals(symptoms[0], "diabetes"))
+                        {
+                            double carbohydrate = symptomsResults[0].Carbohydrate;
+                            double sugar = symptomsResults[0].Sugar;
+
+                            if (results[i].Carbohydrate <= carbohydrate)
+                            {
+                                foodGoodCount++;
+                            }
+                            if (results[i].Sugar <= sugar)
+                            {
+                                foodGoodCount++;
+                            }
+                            if (foodGoodCount >= 2)
+                                printResultToUser += results[i].RowKey + " is **highly recommended** for diabetes person \n";
+                            else
+                                printResultToUser += results[i].RowKey + " is **not recommended** for diabetes person \n";
+
+
+
+                        }
+                        else if (string.Equals(symptoms[0], "obese"))
+                        {
+
+                            if (results[i].Calories <= 105)
+                            {
+                                foodGoodCount++;
+
+                            }
+                            if (foodGoodCount >= 1)
+                                printResultToUser += results[i].RowKey + " is **highly recommended**  for obesity person \n";
+                            else
+                                printResultToUser += results[i].RowKey + " is **not recommended**  for obesity person \n";
+
+                        }
+
+                    }
+                    else
+                    {
+                        printCounter = false;
+                        await context.PostAsync("Sorry cant handle your request  " + "information is not found in our database");
+                    }
+
+
+                }
+                if (printCounter)
+                    await context.PostAsync(printResultToUser);
+
+            }
+            else
+            {
+                await context.PostAsync("Sorry, our bot cant handle your case ,because symptoms information is not found in our database, please specify only constipation,diabetes or obese");
+            }
+
+
+
+            context.Wait(MessageReceived);
         }
 
         [LuisIntent("Finish")]
@@ -1211,6 +1322,34 @@ namespace Microsoft.Bot.Sample.LuisBot
                 if (retrievedResult.Result != null)
                 {
                     results.Add((FoodData)retrievedResult.Result);
+                }
+                // else, handling food not found in FoodData db
+                else
+                {
+                    results.Add(null);
+                }
+
+            }
+
+            return results;
+
+        }
+
+        // terrance
+        private async Task<IList<SymptomsData>> SymptomsInfoQuery(IList<string> symptoms)
+        {
+
+            IList<SymptomsData> results = new List<SymptomsData>();
+
+            foreach (var food in symptoms)
+            {
+
+                TableOperation retrieveOp = TableOperation.Retrieve<SymptomsData>("Symptoms.Food.Query ", food);
+                TableResult retrievedResult = await foodinfotable.ExecuteAsync(retrieveOp);
+
+                if (retrievedResult.Result != null)
+                {
+                    results.Add((SymptomsData)retrievedResult.Result);
                 }
                 // else, handling food not found in FoodData db
                 else
@@ -1417,6 +1556,40 @@ namespace Microsoft.Bot.Sample.LuisBot
         public override string ToString()
         {
             return $"FODD : ${food.ToString()} QTY : {qty}";
+        }
+    }
+
+    // terrance
+    public class SymptomsData : TableEntity
+    {
+
+        public SymptomsData(string domain, string id)
+        {
+            this.PartitionKey = domain; //ENTITY NAME
+            this.RowKey = id; //FOOD NAME, USER GROUP, SYMPTOM NAME
+        }
+
+        public SymptomsData() { }
+
+        public double Calories { get; set; }
+        public double Fat { get; set; }
+        public double Sugar { get; set; }
+        public double Sodium { get; set; }
+        public double Protein { get; set; }
+        public double Carbohydrate { get; set; }
+        public double Fibre { get; set; }
+
+        public override string ToString()
+        {
+            return "\nFood Name : " + this.RowKey + "\nCalories : " + this.Calories +
+                "\nFat : " + this.Fat + "\nSugar : " + this.Sugar + "\nSodium : " + this.Sodium + "\nProtein : " +
+                this.Protein + "\nCarbohydrate : " + this.Carbohydrate + "\nFibre : " + this.Fibre;
+        }
+
+        public string GetFullDiet()
+        {
+            return $"Calories: {Calories} kCal\nFat: {Fat} g\nSugar: {Sugar} " +
+                $"g\nSodium: {Sodium} g\nProtein: {Protein} g\nCarbohydrate: {Carbohydrate} g\nFibre: {Fibre} g\n";
         }
     }
 
