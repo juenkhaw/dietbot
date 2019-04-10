@@ -92,6 +92,28 @@ namespace Microsoft.Bot.Sample.LuisBot
         bool AskedForFood3 = false;
         bool ReloadedPrevFoods = false;
 
+        // fixed mapping food type <--> nutrition
+        static Dictionary<string, List<string>> FoodTypeNutriMap = new Dictionary<string, List<string>>
+        {
+            ["fruits"] = new List<string> { "fibre", "sugar", "carbohydrate" },
+            ["vegetables"] = new List<string> { "fibre", "sodium" },
+            ["grains"] = new List<string> { "carbohydrate" },
+            ["protein food"] = new List<string> { "protein", "sodium" },
+            ["dairy product"] = new List<string> { "sugar", "fat", "carbohydrate" },
+            ["oils product"]  = new List<string> { "fat" }
+        };
+
+        // fixed mapping food type <--> food name
+        static Dictionary<string, List<string>> FoodTypeNameMap = new Dictionary<string, List<string>>
+        {
+            ["fruits"] = new List<string> { "banana", "apple" },
+            ["vegetables"] = new List<string> { "broccoli", "carrot" },
+            ["protein"] = new List<string> { "fish", "chicken" },
+            ["grains"] = new List<string> { "bread", "rice" },
+            ["oils"] = new List<string> { "crackers", "butter" },
+            ["dairy"] = new List<string> { "milk", "yogurt" }
+        };
+
         // ========================================================================
 
         public BasicLuisDialog() : base(new LuisService(new LuisModelAttribute(
@@ -710,6 +732,7 @@ namespace Microsoft.Bot.Sample.LuisBot
 
                 var keysEnumerate = UserDietNutri.Keys.GetEnumerator();
 
+                // determine whether each nutrition are lacking or exceeding
                 while (keysEnumerate.MoveNext())
                 {
                     string key = keysEnumerate.Current;
@@ -721,15 +744,24 @@ namespace Microsoft.Bot.Sample.LuisBot
                         NutriExceed.Add(key);
                 }
 
+                // reply about calories
                 reply += $"You have taken **{UserDietNutri["calories"]} kCal** of calories in your last meal!\n";
+                if (NutriExceed.Contains("calories"))
+                    reply += "That's a lot! Try eating fewer in your next meal.\n";
+                else if (NutriLack.Contains("calories"))
+                    reply += "That's quite few.. Try eating more in your next meal.\n";
 
+                // reply about other macronutrition
                 if (NutriExceed.Count > 0)
                 {
-                    reply += "\nSeems like you have taken **excessive** amount of ";
+                    reply += "\nSeems like you took **excessive** amount of ";
                     for(int i = 0; i<NutriExceed.Count; i++)
                     {
-                        reply += $"{NutriExceed[i]}" +
-                            $"{((i != (NutriExceed.Count - 1)) ? (NutriExceed.Count > 1) ? (i != (NutriExceed.Count - 2)) ? ", " : " and " : "" : "")}";
+                        if (!NutriExceed[i].Equals("calories"))
+                        {
+                            reply += $"**{NutriExceed[i]}**" +
+                                $"{((i != (NutriExceed.Count - 1)) ? (NutriExceed.Count > 1) ? (i != (NutriExceed.Count - 2)) ? ", " : " and " : "" : "")}";
+                        }
                     }
                     if (NutriLack.Count == 0)
                         reply += " in your last meal";
@@ -738,14 +770,17 @@ namespace Microsoft.Bot.Sample.LuisBot
                 }
                 if (NutriLack.Count > 0)
                 {
-                    if (NutriExceed.Count > 0)
+                    if (NutriExceed.Count > 0 && !(NutriExceed.Count == 1 && NutriExceed.Contains("calories")))
                         reply += "\nYou are also **lacking** of ";
                     else
                         reply += "\nSeems like you are **lacking** of ";
                     for (int i = 0; i < NutriLack.Count; i++)
                     {
-                        reply += $"{NutriLack[i]}" +
-                            $"{((i != (NutriLack.Count - 1)) ? (NutriLack.Count > 1) ? (i != (NutriLack.Count - 2)) ? ", " : " and " : "" : "")}";
+                        if (!NutriLack[i].Equals("calories"))
+                        {
+                            reply += $"**{NutriLack[i]}**" +
+                                $"{((i != (NutriLack.Count - 1)) ? (NutriLack.Count > 1) ? (i != (NutriLack.Count - 2)) ? ", " : " and " : "" : "")}";
+                        }
                     }
                     reply += " in your last meal.";
                 }
@@ -754,12 +789,89 @@ namespace Microsoft.Bot.Sample.LuisBot
                     reply += "\nWow! You are doing a great job in balancing your diet.\nKeep it up in your next meal!";
                 }
 
-                //reply += UserDiet.Calories;
-                //reply += ", " + UserDiet.GetNutriValues()[3];
+
+                await context.PostAsync(reply);
+
+                // making reply on recommended foods
+                reply = "";
+                List<string> EatLess = FilterFoodType(NutriExceed, false, null);
+                List<string> EatMore = FilterFoodType(NutriLack, true, EatLess);
+
+                // print which foods to eat
+                if (EatMore.Count > 0)
+                {
+                    reply = "In your next meal,\nyou could **consuming more** ";
+                    for (int i = 0; i < EatMore.Count; i++)
+                        reply += $"**{EatMore[i]}**{((i != EatMore.Count - 1) ? " and " : ".")}";
+                }
+                if (EatLess.Count > 0)
+                {
+                    if (EatMore.Count > 0)
+                        reply += "\nBut try to **control** consumption on ";
+                    else
+                        reply += "In your next meal,\nyou should **control** consumption on ";
+
+                    for (int i = 0; i < EatLess.Count; i++)
+                        reply += $"**{EatLess[i]}**{((i != EatMore.Count - 1) ? " and " : ".")}";
+                }
             }
 
-            await context.PostAsync(reply);
+            if (!reply.Equals(""))
+                await context.PostAsync(reply);
+
             context.Wait(MessageReceived);
+        }
+
+        private List<string> FilterFoodType(List<string> Nutris, bool EatMore, List<string> EatLess)
+        {
+            var FoodTypeKey = FoodTypeNutriMap.GetEnumerator();
+            int Score = 0;
+            List<string> FoodName = new List<string>();
+
+            // seeing which foods to eat
+            if (Nutris.Count > 0)
+            {
+                List<string> curNutris;
+                int curScore = 0;
+                while (FoodTypeKey.MoveNext())
+                {
+                    curScore = 0;
+                    curNutris = FoodTypeNutriMap[FoodTypeKey.Current.Key];
+                    foreach (string nutri in curNutris)
+                    {
+                        foreach (string lack in Nutris)
+                        {
+                            if (nutri.Equals(lack))
+                            {
+                                curScore++;
+                                break;
+                            }
+                        }
+                    }
+                    if (curScore >= Score)
+                    {
+                        if (curScore > Score)
+                        {
+                            Score = curScore;
+                            FoodName.Clear();
+                        }
+                        FoodName.Add(FoodTypeKey.Current.Key);
+                    }
+                }
+            }
+
+            if (!EatMore)
+                FoodName.Reverse();
+            else
+            {
+                foreach (string foodname in EatLess)
+                    FoodName.Remove(foodname);
+            }
+
+            if (FoodName.Count <= 2)
+                return FoodName;
+            else
+                return FoodName.GetRange(0, 2);
         }
 
         private async Task ExecLoadingAllPrevFoods(IDialogContext context, IAwaitable<ConfirmOption> result)
